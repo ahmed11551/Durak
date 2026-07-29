@@ -1,11 +1,12 @@
 import React from 'react';
-import { Card } from './Card';
+import { Card as CardType, CardSuit } from '../types';
+import { CardComponent as Card } from './Card';
 
 interface HandProps {
-  cards: import('../../types').Card[];
-  trumpSuit?: import('../../types').CardSuit;
+  cards: CardType[];
+  trumpSuit?: CardSuit;
   selectedCardId?: string | null;
-  onCardClick?: (card: import('../../types').Card) => void;
+  onCardClick?: (card: CardType) => void;
 }
 
 export const Hand: React.FC<HandProps> = ({ cards, trumpSuit, selectedCardId, onCardClick }) => {
@@ -17,7 +18,7 @@ export const Hand: React.FC<HandProps> = ({ cards, trumpSuit, selectedCardId, on
           <Card
             key={card.id}
             card={card}
-            isTrump={trumpSuit ? card.suit === trumpSuit : false}
+            isTrump={!!(trumpSuit && card.suit === trumpSuit)}
             isSelected={isSelected}
             onClick={() => onCardClick?.(card)}
           />

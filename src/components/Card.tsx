@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Card as CardType, CardSuit } from '../types';
 
 const SUIT_ICONS: Record<CardSuit, { symbol: string; colorClass: string }> = {
@@ -26,9 +27,14 @@ export const CardComponent: React.FC<CardProps> = ({ card, isTrump, isSelected, 
   const s = sizeStyles[size];
 
   return (
-    <div
+    <motion.div
       onClick={onClick}
       title={`${card.rank} ${suit.symbol}`}
+      initial={{ y: -40, opacity: 0, rotate: -8 }}
+      animate={{ y: 0, opacity: 1, rotate: 0 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+      whileHover={{ y: -10, scale: 1.04 }}
+      whileTap={{ scale: 0.97 }}
       className={[
         'relative rounded-xl border-2 shadow-xl select-none transition-all duration-200 flex flex-col justify-between bg-white cursor-pointer hover:-translate-y-2',
         s.w,
@@ -49,6 +55,6 @@ export const CardComponent: React.FC<CardProps> = ({ card, isTrump, isSelected, 
         <span className={`font-black font-mono ${s.rankCorner} ${suit.colorClass}`}>{card.rank}</span>
         <span className="text-xs">{suit.symbol}</span>
       </div>
-    </div>
+    </motion.div>
   );
 };

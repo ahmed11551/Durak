@@ -1,6 +1,7 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Card, CardSuit, PlayerState, TablePair } from '../types';
-import { CardComponent } from './Card';
+import { CardComponent as Card } from './Card';
 import { CardBack } from './CardBack';
 
 interface GameTableProps {
@@ -101,16 +102,22 @@ export const GameTable: React.FC<GameTableProps> = ({
       <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
         <div className="flex flex-wrap items-center justify-center gap-4 opacity-90">
           {tablePairs.map((pair) => (
-            <div key={pair.id} className="flex items-center gap-2">
-              <div className="shadow-xl rounded-lg">
+            <motion.div
+              key={pair.id}
+              className="flex items-center gap-2"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            >
+              <motion.div className="shadow-xl rounded-lg" initial={{ y:-30 }} animate={{ y:0 }} transition={{ duration: 0.35 }}>
                 <CardComponent card={pair.attackCard} size="sm" />
-              </div>
+              </motion.div>
               {pair.defendCard && (
-                <div className="shadow-xl rounded-lg">
+                <motion.div className="shadow-xl rounded-lg" initial={{ y:30 }} animate={{ y:0 }} transition={{ duration: 0.35 }}>
                   <CardComponent card={pair.defendCard} size="sm" />
-                </div>
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           ))}
 
           {tablePairs.length === 0 && (

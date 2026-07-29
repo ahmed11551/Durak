@@ -216,7 +216,7 @@ export default function App() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-slate-950 flex flex-col">
+    <div className="min-h-screen bg-app-bg text-contrast font-sans antialiased selection:bg-amber-500 selection:text-slate-950 flex flex-col">
       {/* Navbar Header */}
       <HeaderNavbar
         user={user}
