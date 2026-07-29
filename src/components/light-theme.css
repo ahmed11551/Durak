@@ -5,14 +5,14 @@
 
 /* ---------- Theme tokens ---------- */
 :root {
-  --color-app-bg: #f5f0e8;
-  --color-table-felt: #1b4332;
-  --color-table-felt-light: #2d6a4f;
+  --color-app-bg: #0f1115;
+  --color-table-felt: #0a3d2e;
+  --color-table-felt-light: #166534;
   --color-card-bg: #ffffff;
-  --color-card-border: #e5e0d8;
-  --color-card-shadow: rgba(0, 0, 0, 0.3);
-  --color-accent: #f59e0b;
-  --color-accent-strong: #d97706;
+  --color-card-border: #e7e5e4;
+  --color-card-shadow: rgba(15, 23, 42, 0.45);
+  --color-accent: #facc15;
+  --color-accent-strong: #eab308;
 }
 
 /* ---------- Keyframes ---------- */
@@ -101,12 +101,7 @@
 }
 
 /* ---------- Base light app reset ---------- */
-html,
-body,
-#root {
-  background: var(--color-app-bg);
-  color: #2c2a25;
-}
+html,body,#root{background:var(--color-app-bg);color:#e7e5e4;}
 
 /* ---------- Reusable cards ---------- */
 .card-light {
@@ -184,25 +179,12 @@ body,
 }
 
 /* ---------- Utility surface colors for light UI ---------- */
-.surface-raised {
-  background: #ffffff;
-  border: 1px solid #e5e0d8;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
+.surface-raised{background:#ffffff;border:1px solid #e5e0d8;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
 
-.surface-muted {
-  background: #faf8f4;
-  border: 1px solid #ece6db;
-}
+.surface-muted{background:#111318;border:1px solid #262a33}
 
-.text-contrast {
-  color: #2c2a25;
-}
+.text-contrast{color:#e7e5e4}
 
-.text-muted {
-  color: #7a736a;
-}
+.text-muted{color:#a8a29e}
 
-.border-contrast {
-  border-color: #e5e0d8;
-}
+.border-contrast{border-color:#e5e0d8}
