@@ -221,6 +221,44 @@ app.get('/api/tables', (req, res) => {
   res.json({ tables: Array.from(activeTables.values()) });
 });
 
+// In-memory user store for MVP; replace with DB in Phase 2
+const registeredUsers = new Map<string, User>();
+const sessions = new Map<string, { userId: string; expiresAt: number }>();
+
+function issueSession(userId: string) {
+  const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  sessions.set(token, { userId, expiresAt });
+  return token;
+}
+
+app.post('/api/auth/telegram', (req, res) => {
+  const { initData, username, firstName, lastName, telegramId, photoUrl } = req.body || {};
+  const tgId = String(telegramId || username || Math.random().toString(36).slice(2, 10));
+  const safeName = String(firstName || username || 'Игрок').slice(0, 32);
+
+  let user = registeredUsers.get(tgId);
+  if (!user) {
+    user = {
+      id: tgId,
+      username: safeName,
+      avatar: photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+      role: 'user',
+      balances: { USD: 0, EUR: 0, RUB: 0, USDT: 0, TON: 0, STARS: 0 },
+      is2FAEnabled: false,
+      riskScore: 0,
+      isBlocked: false,
+      telegramId: tgId,
+      ipAddress: '',
+      createdAt: new Date().toISOString(),
+    };
+    registeredUsers.set(tgId, user);
+  }
+
+  const token = issueSession(user.id);
+  res.json({ user, token });
+});
+
 app.post('/api/auth/toggle-admin', (req, res) => {
   currentUser.role = currentUser.role === 'admin' ? 'user' : 'admin';
   res.json({ user: currentUser });

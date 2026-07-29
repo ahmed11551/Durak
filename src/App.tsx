@@ -32,6 +32,8 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState<boolean>(false);
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [authStep, setAuthStep] = useState<'check' | 'login' | 'offer'>('check');
+  const [acceptedOffer, setAcceptedOffer] = useState<boolean>(false);
 
   const [gateways, setGateways] = useState<PaymentGatewayConfig[]>([]);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
@@ -212,6 +214,9 @@ export default function App() {
       </div>
     );
   }
+
+  const openAuth = () => setAuthStep('login');
+  const openOffer = () => setAuthStep('offer');
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

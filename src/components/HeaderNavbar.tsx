@@ -15,6 +15,7 @@ import {
 import { Currency, User } from '../types';
 import { soundManager } from '../lib/audio';
 import { isTelegramMiniApp } from '../lib/telegram';
+import { ShieldCheck } from 'lucide-react';
 
 interface HeaderNavbarProps {
   user: User;
@@ -28,6 +29,7 @@ interface HeaderNavbarProps {
   isMuted: boolean;
   onToggleMute: () => void;
   onToggleAdminRole: () => void;
+  onOpenOffer?: () => void;
 }
 
 const CURRENCIES: { code: Currency; symbol: string; bg: string; text: string }[] = [
@@ -51,6 +53,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   isMuted,
   onToggleMute,
   onToggleAdminRole,
+  onOpenOffer,
 }) => {
   const currentCurrMeta = CURRENCIES.find((c) => c.code === activeCurrency) || CURRENCIES[0];
 
@@ -159,7 +162,10 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
               {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
             </button>
 
-            {/* Admin Panel Button */}
+            {/* Offer + Auth */}
+            <button onClick={onOpenOffer} className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors" title="Оферта / Конфиденциальность">
+              <ShieldCheck className="w-4 h-4" />
+            </button>
             <button
               onClick={onOpenAdmin}
               className={`px-2.5 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all ${
