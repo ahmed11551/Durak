@@ -1,4 +1,5 @@
 import express from 'express';
+import * as bcrypt from 'bcrypt';
 const registeredUsers = new Map<string, any>();
 import http from 'http';
 import path from 'path';
@@ -101,6 +102,7 @@ db.exec(`
     createdAt TEXT
   );
 `);
+const SALT_ROUNDS = 12;
 function issueSession(userId: string) {
   const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -346,7 +348,12 @@ app.post('/api/compliance/limits', authMiddleware, (req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user || user.passwordHash !== Buffer.from(password).toString('base64')) return res.status(401).json({ error: 'invalid credentials' });
+  const valid = user.passwordHash.length > 20 ? bcrypt.compareSync(password, user.passwordHash) : Buffer.from(password).toString('base64') === user.passwordHash;
+    if (!user || !valid) return res.status(401).json({ error: 'invalid credentials' });
+    if (user.passwordHash.length <= 20) {
+      const upgrade = bcrypt.hashSync(password, SALT_ROUNDS);
+      db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(upgrade, user.id);
+    }
   const token = issueSession(user.id);
   res.json({ user, token });
 });
@@ -521,6 +528,7 @@ app.post('/api/notifications/mark-read', (req, res) => {
 });
 
 // ADMIN API ENDPOINTS
+app.use((req, res, next) => { const u = (req as any).user; if (!u || u.role !== 'admin') return res.status(403).json({ error: 'forbidden' }); next(); });
 app.get('/api/admin/users', (req, res) => {
   const rows = db.prepare('SELECT id, username, email, role, riskScore, isBlocked, createdAt FROM users ORDER BY datetime(createdAt) DESC').all();
   res.json({ users: rows });
