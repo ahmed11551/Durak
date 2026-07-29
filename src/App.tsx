@@ -46,6 +46,7 @@ export default function App() {
   const [authToken, setAuthToken] = useState<string>('');
   const [games, setGames] = useState<GameTable[]>([]);
   const [showGameHistory, setShowGameHistory] = useState<boolean>(false);
+  const [loadFailed, setLoadFailed] = useState<boolean>(false);
 
   // Initialize Telegram WebApp integration
   useEffect(() => {
@@ -54,6 +55,7 @@ export default function App() {
 
   // Fetch initial profile & data
   const fetchUserData = async () => {
+    setLoadFailed(false);
     try {
       const headers: Record<string,string> = {};
       if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
@@ -74,6 +76,7 @@ export default function App() {
       setNotifications(notifRes.notifications || []);
     } catch (err) {
       console.error('Initial fetch failed:', err);
+      setLoadFailed(true);
     }
   };
 
@@ -87,47 +90,75 @@ export default function App() {
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | null = null;
+    let retries = 0;
+    const maxRetries = 3;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'auth', userId: user?.id }));
-      if (activeTableId) {
-        ws.send(JSON.stringify({ type: 'subscribe_table', tableId: activeTableId }));
-      }
-    };
-
-    ws.onmessage = (event) => {
+    const connect = () => {
       try {
-        const msg = JSON.parse(event.data);
-
-        if (msg.type === 'lobby_tables') {
-          setTables(msg.tables || []);
-          if (activeTableId) {
-            const updated = (msg.tables || []).find((t: GameTable) => t.id === activeTableId);
-            if (updated) setCurrentTable(updated);
-          }
-        }
-
-        if (msg.type === 'table_state' || msg.type === 'table_created') {
-          setCurrentTable(msg.table);
-          if (msg.type === 'table_created') {
-            setActiveTableId(msg.table.id);
-          }
-        }
-
-        if (msg.type === 'error') {
-          triggerHapticFeedback('error');
-          alert(msg.message);
-        }
+        ws = new WebSocket(wsUrl);
       } catch (e) {
-        console.error('WS Parse Error:', e);
+        console.warn('WS connect failed', e);
+        return;
       }
+
+      ws.onopen = () => {
+        retries = 0;
+        try {
+          ws?.send(JSON.stringify({ type: 'auth', userId: user?.id }));
+          if (activeTableId) {
+            ws?.send(JSON.stringify({ type: 'subscribe_table', tableId: activeTableId }));
+          }
+        } catch {}
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === 'lobby_tables') {
+            setTables(msg.tables || []);
+            if (activeTableId) {
+              const updated = (msg.tables || []).find((t: GameTable) => t.id === activeTableId);
+              if (updated) setCurrentTable(updated);
+            }
+          }
+
+          if (msg.type === 'table_state' || msg.type === 'table_created') {
+            setCurrentTable(msg.table);
+            if (msg.type === 'table_created') {
+              setActiveTableId(msg.table.id);
+            }
+          }
+
+          if (msg.type === 'error') {
+            triggerHapticFeedback('error');
+            alert(msg.message);
+          }
+        } catch (e) {
+          console.error('WS Parse Error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        if (retries < maxRetries) {
+          retries += 1;
+          setTimeout(connect, 1000 * retries);
+        }
+      };
+
+      ws.onerror = () => {
+        try { ws?.close(); } catch {}
+      };
+
+      setWsSocket(ws);
     };
 
-    setWsSocket(ws);
+    connect();
 
     return () => {
-      ws.close();
+      retries = maxRetries;
+      try { ws?.close(); } catch {}
     };
   }, [activeTableId, user?.id]);
 
@@ -223,6 +254,14 @@ export default function App() {
         <div className="text-center space-y-3">
           <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-xs font-bold text-muted">Loading Durak Gaming Platform...</p>
+          {loadFailed && (
+            <button
+              onClick={fetchUserData}
+              className="px-4 py-2 rounded bg-accent text-white text-sm font-bold"
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );
