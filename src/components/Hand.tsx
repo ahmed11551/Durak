@@ -11,7 +11,7 @@ interface HandProps {
 
 export const Hand: React.FC<HandProps> = ({ cards, trumpSuit, selectedCardId, onCardClick }) => {
   return (
-    <div className="flex items-center justify-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 pt-1">
+    <div className="flex items-end justify-center gap-1 sm:gap-2 overflow-x-auto pb-2 pt-1">
       {cards.map((card) => {
         const isSelected = selectedCardId === card.id;
         return (

@@ -155,7 +155,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-900/30 via-slate-950/80 to-slate-950 pointer-events-none" />
 
       {/* Table Top Header Bar */}
-      <div className="relative z-10 flex items-center justify-between gap-2 bg-white/90 p-3 rounded-2xl border border-slate-200 backdrop-blur-md shadow-sm">
+      <div className="relative z-10 flex items-center justify-between gap-2 bg-white/90 p-3 rounded-xl border border-slate-200 backdrop-blur-md shadow-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={onBackToLobby}
@@ -338,7 +338,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
                 <motion.div
                   key={pair.id}
                   onClick={() => handlePairClick(pair)}
-                  className={`relative w-20 h-28 sm:w-24 sm:h-32 transition-all ${
+                  className={`relative w-16 h-24 sm:w-20 sm:h-28 transition-all ${
                     isMyTurnToDefend && selectedCardId && !pair.defendCard ? 'ring-2 ring-amber-400 rounded-xl cursor-pointer animate-pulse' : ''
                   }`}
                   initial={{ scale: 0.8, opacity: 0, y: -18 }}
@@ -423,7 +423,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
 
       {/* In-Game Table Chat Popup */}
       {showChat && (
-        <div className="absolute right-4 bottom-20 z-40 bg-white border border-slate-200 rounded-2xl w-80 shadow-2xl p-4 space-y-3">
+        <div className="absolute right-4 bottom-20 z-40 bg-white border border-slate-200 rounded-2xl w-72 sm:w-80 shadow-2xl p-3 sm:p-4 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-200 pb-2">
             <span className="font-bold text-xs text-slate-800">Чат стола</span>
             <button onClick={() => setShowChat(false)} className="text-slate-500 hover:text-slate-700">

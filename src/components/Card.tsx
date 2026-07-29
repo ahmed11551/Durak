@@ -14,15 +14,17 @@ interface CardProps {
   isTrump?: boolean;
   isSelected?: boolean;
   onClick?: () => void;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
 }
 
 const sizeStyles: Record<string, { w: string; h: string; p: string; rankCorner: string; suitCenter: string }> = {
+  xs: { w: 'w-10', h: 'h-14', p: 'p-1.5', rankCorner: 'text-[10px]', suitCenter: 'text-xl' },
   sm: { w: 'w-14', h: 'h-20', p: 'p-2', rankCorner: 'text-xs', suitCenter: 'text-2xl' },
   md: { w: 'w-20', h: 'h-28', p: 'p-3', rankCorner: 'text-sm', suitCenter: 'text-3xl' },
 };
 
 export const CardComponent: React.FC<CardProps> = ({ card, isTrump, isSelected, onClick, size = 'md' }) => {
+  const effectiveSize = (size === 'md' && typeof window !== 'undefined' && window.innerWidth < 640) ? 'sm' : size;
   const suit = SUIT_ICONS[card.suit];
   const s = sizeStyles[size];
 
