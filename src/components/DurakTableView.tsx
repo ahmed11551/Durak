@@ -23,6 +23,7 @@ import { CardSuit, GameTable, PlayerState, TablePair, User } from '../types';
 import { soundManager } from '../lib/audio';
 import { triggerHapticFeedback } from '../lib/telegram';
 import { ShareTableModal } from './ShareTableModal';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CardComponent as Card } from './Card';
 import { Hand } from './Hand';
 import { CardBack } from './CardBack';
@@ -64,6 +65,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
   const [showChat, setShowChat] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [chatInput, setChatInput] = useState<string>('');
+  const [feedback, setFeedback] = useState<'play' | 'defend' | 'bito' | 'take' | null>(null);
 
   const me = table.players.find((p) => p.id === user.id);
   const attacker = table.players[table.attackerIndex];
@@ -71,6 +73,18 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
 
   const isMyTurnToAttack = attacker?.id === user.id;
   const isMyTurnToDefend = defender?.id === user.id;
+
+  useEffect(() => {
+    if (!feedback) return;
+    // sound/haptic
+    if (feedback === 'play') soundManager.playCardPlay();
+    if (feedback === 'defend') soundManager.playDefend();
+    if (feedback === 'bito') soundManager.playBito();
+    if (feedback === 'take') soundManager.playTake();
+    triggerHapticFeedback(feedback === 'bito' || feedback === 'take' ? 'success' : 'light');
+    const t = setTimeout(() => setFeedback(null), 420);
+    return () => clearTimeout(t);
+  }, [feedback]);
 
   // Trigger victory fanfare and confetti when game finishes and current user won
   useEffect(() => {
@@ -88,6 +102,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
   const handleCardClick = (card: import('../types').Card) => {
     soundManager.playCardFlip();
     triggerHapticFeedback('light');
+    if (isMyTurnToAttack) setFeedback('play');
 
     if (isMyTurnToAttack) {
       onAttack(card.id);
@@ -106,8 +121,9 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
   const handlePairClick = (pair: TablePair) => {
     if (isMyTurnToDefend && selectedCardId && !pair.defendCard) {
       onDefend(selectedCardId, pair.id);
-      soundManager.playCardSlap();
+      soundManager.playDefend();
       triggerHapticFeedback('medium');
+      setFeedback('defend');
       setSelectedCardId(null);
     } else {
       setSelectedPairId(pair.id);
@@ -319,27 +335,35 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
               </div>
             ) : (
               table.tablePairs.map((pair) => (
-                <div
+                <motion.div
                   key={pair.id}
                   onClick={() => handlePairClick(pair)}
                   className={`relative w-20 h-28 sm:w-24 sm:h-32 transition-all ${
-                    isMyTurnToDefend && selectedCardId && !pair.defendCard
-                      ? 'ring-2 ring-amber-400 rounded-xl cursor-pointer animate-pulse'
-                      : ''
+                    isMyTurnToDefend && selectedCardId && !pair.defendCard ? 'ring-2 ring-amber-400 rounded-xl cursor-pointer animate-pulse' : ''
                   }`}
+                  initial={{ scale: 0.8, opacity: 0, y: -18 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 20 }}
                 >
-                  {/* Attack Card */}
-                  <div className="absolute top-0 left-0">
+                  <motion.div
+                    className="absolute top-0 left-0"
+                    initial={{ y: -28, rotate: -6 }}
+                    animate={{ y: 0, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                  >
                     {renderPairCard(pair.attackCard, pair.attackCard.suit === table.trumpSuit)}
-                  </div>
-
-                  {/* Defend Card (placed slightly rotated on top) */}
+                  </motion.div>
                   {pair.defendCard && (
-                    <div className="absolute top-4 left-4 rotate-6 transform shadow-2xl">
+                    <motion.div
+                      className="absolute top-4 left-4 rotate-6 transform shadow-2xl"
+                      initial={{ y: 28, rotate: 8 }}
+                      animate={{ y: 0, rotate: 6 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                    >
                       {renderPairCard(pair.defendCard, pair.defendCard.suit === table.trumpSuit)}
-                    </div>
+                    </motion.div>
                   )}
-                </div>
+                </motion.div>
               ))
             )}
           </div>
@@ -358,7 +382,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
 
           {isMyTurnToAttack && (
             <button
-              onClick={onBito}
+              onClick={() => { setFeedback("bito"); onBito(); }}
               disabled={table.tablePairs.length === 0 || table.tablePairs.some((p) => !p.defendCard)}
               className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 flex items-center gap-1.5"
             >
