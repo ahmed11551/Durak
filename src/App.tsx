@@ -204,10 +204,10 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-app-bg text-contrast flex items-center justify-center p-4">
         <div className="text-center space-y-3">
-          <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-xs font-bold text-slate-400">Loading Durak Gaming Platform...</p>
+          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-bold text-muted">Loading Durak Gaming Platform...</p>
         </div>
       </div>
     );

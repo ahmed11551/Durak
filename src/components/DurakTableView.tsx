@@ -19,10 +19,11 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import { Card, CardSuit, GameTable, PlayerState, TablePair, User } from '../types';
+import { CardSuit, GameTable, PlayerState, TablePair, User } from '../types';
 import { soundManager } from '../lib/audio';
 import { triggerHapticFeedback } from '../lib/telegram';
 import { ShareTableModal } from './ShareTableModal';
+import { Card, CardBack, Hand } from './Card';
 
 interface DurakTableViewProps {
   user: User;
@@ -124,40 +125,9 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
   };
 
   // Render individual Card UI
-  const renderCard = (card: Card, isTrump: boolean = false, onClick?: () => void) => {
-    const suitMeta = SUIT_ICONS[card.suit];
-    const isSelected = selectedCardId === card.id;
-
+  const renderPairCard = (card: Card, isTrump = false, onClick?: () => void) => {
     return (
-      <div
-        key={card.id}
-        onClick={onClick}
-        className={`relative w-16 h-24 sm:w-20 sm:h-28 rounded-xl bg-slate-100 border-2 shadow-2xl flex flex-col justify-between p-1.5 cursor-pointer select-none transition-all duration-200 transform ${
-          isSelected
-            ? '-translate-y-4 ring-4 ring-amber-400 border-amber-500 scale-105 shadow-amber-500/30'
-            : isTrump
-            ? 'border-amber-400 shadow-amber-500/20 hover:-translate-y-2'
-            : 'border-slate-300 hover:-translate-y-2'
-        }`}
-      >
-        <div className="flex justify-between items-center leading-none">
-          <span className={`font-black font-mono text-sm sm:text-base ${suitMeta.color.includes('red') ? 'text-red-600' : 'text-slate-900'}`}>
-            {card.rank}
-          </span>
-          <span className="text-xs sm:text-sm">{suitMeta.symbol}</span>
-        </div>
-
-        <div className="text-center font-black text-2xl sm:text-3xl my-auto select-none">
-          {suitMeta.symbol}
-        </div>
-
-        <div className="flex justify-between items-center leading-none rotate-180">
-          <span className={`font-black font-mono text-sm sm:text-base ${suitMeta.color.includes('red') ? 'text-red-600' : 'text-slate-900'}`}>
-            {card.rank}
-          </span>
-          <span className="text-xs sm:text-sm">{suitMeta.symbol}</span>
-        </div>
-      </div>
+      <Card card={card} isTrump={isTrump} onClick={onClick} />
     );
   };
 
@@ -295,6 +265,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
                 <span className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">
                   в колоде
                 </span>
+                <CardBack className="absolute inset-0 m-auto opacity-20" />
               </div>
             ) : (
               <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-xl border-2 border-dashed border-slate-700/60 flex items-center justify-center text-slate-600 font-bold text-xs">
@@ -357,13 +328,13 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
                 >
                   {/* Attack Card */}
                   <div className="absolute top-0 left-0">
-                    {renderCard(pair.attackCard)}
+                    {renderPairCard(pair.attackCard, pair.attackCard.suit === table.trumpSuit)}
                   </div>
 
                   {/* Defend Card (placed slightly rotated on top) */}
                   {pair.defendCard && (
                     <div className="absolute top-4 left-4 rotate-6 transform shadow-2xl">
-                      {renderCard(pair.defendCard)}
+                      {renderPairCard(pair.defendCard, pair.defendCard.suit === table.trumpSuit)}
                     </div>
                   )}
                 </div>
@@ -415,12 +386,12 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
             {isMyTurnToDefend && <span className="text-sky-400 font-bold animate-pulse">Ваш ход — Защищайтесь!</span>}
           </div>
 
-          <div className="flex items-center justify-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 pt-1">
-            {me?.cards.map((c) => {
-              const isTrump = c.suit === table.trumpSuit;
-              return renderCard(c, isTrump, () => handleCardClick(c));
-            })}
-          </div>
+          <Hand
+            cards={me?.cards || []}
+            trumpSuit={table.trumpSuit ?? undefined}
+            selectedCardId={selectedCardId}
+            onCardClick={(card) => handleCardClick(card)}
+          />
         </div>
       </div>
 

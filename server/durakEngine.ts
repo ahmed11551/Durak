@@ -537,3 +537,68 @@ export function computeBotMove(table: GameTable): GameTable {
 
   return table;
 }
+
+
+export function dealCards(deck: Card[], players: PlayerState[], deckSize: 24 | 36): { updatedDeck: Card[]; updatedPlayers: PlayerState[] } {
+  const remainingDeck = deck.length > 0 ? [...deck] : createDeck(deckSize);
+  const updatedPlayers = players.map((p) => ({ ...p, cards: p.cards ? [...p.cards] : [] }));
+
+  for (let i = 0; i < 6; i++) {
+    for (const p of updatedPlayers) {
+      if (p.isOut) continue;
+      if (remainingDeck.length > 0) {
+        p.cards.push(remainingDeck.pop()!);
+      }
+    }
+  }
+
+  return { updatedDeck: remainingDeck, updatedPlayers };
+}
+
+export function determineTrump(deck: Card[]): { trumpCard: Card | null; trumpSuit: CardSuit | null } {
+  if (deck.length === 0) {
+    return { trumpCard: null, trumpSuit: null };
+  }
+  const trumpCard = deck[0];
+  return {
+    trumpCard,
+    trumpSuit: trumpCard.suit,
+  };
+}
+
+export function getValidAttacks(
+  attacker: PlayerState,
+  tablePairs: TablePair[],
+  defender: PlayerState
+): Card[] {
+  if (tablePairs.length === 0) {
+    return attacker.cards;
+  }
+
+  const allRanksOnTable = new Set<CardRank>();
+  tablePairs.forEach((pair) => {
+    if (pair.attackCard) allRanksOnTable.add(pair.attackCard.rank);
+    if (pair.defendCard) allRanksOnTable.add(pair.defendCard.rank);
+  });
+
+  return attacker.cards.filter((c) => allRanksOnTable.has(c.rank));
+}
+
+export function canDefend(attackCard: Card, defendCard: Card, trumpSuit: CardSuit): boolean {
+  if (defendCard.suit === attackCard.suit) {
+    return defendCard.value > attackCard.value;
+  }
+  if (defendCard.suit === trumpSuit && attackCard.suit !== trumpSuit) {
+    return true;
+  }
+  return false;
+}
+
+export function checkWinCondition(players: PlayerState[]): { winnerIds: string[]; loserId?: string } {
+  const remaining = players.filter((p) => !p.isOut);
+  const winnerIds = remaining.map((p) => p.id);
+  const loserId = remaining.length === 1 ? remaining[0].id : undefined;
+
+  return { winnerIds, loserId };
+}
+

@@ -1,1 +1,14 @@
 @import "tailwindcss";
+@import "./components/light-theme.css";
+
+body {
+  margin: 0;
+  background: #f5f0e8;
+  color: #2c2a25;
+}
+
+#root {
+  min-height: 100vh;
+  background: #f5f0e8;
+}
+
