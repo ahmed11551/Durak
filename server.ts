@@ -653,9 +653,17 @@ wss.on('connection', (ws) => {
       const data = JSON.parse(messageRaw.toString());
 
       if (data.type === 'auth') {
-        clientConn.userId = data.userId || currentUser.id;
-        clientConn.username = data.username || currentUser.username;
-        clientConn.avatar = data.avatar || currentUser.avatar;
+        const header = (ws as any).headers?.authorization || '';
+        const token = String(header).replace('Bearer ', '').trim();
+        const session = token ? db.prepare('SELECT * FROM sessions WHERE token = ?').get(token) : null;
+        const user = session ? db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId) : null;
+        if (!user) {
+          ws.send(JSON.stringify({ type: 'error', message: 'unauthorized' }));
+          return;
+        }
+        clientConn.userId = user.id;
+        clientConn.username = user.username;
+        clientConn.avatar = user.avatar || '';
       }
 
       if (data.type === 'subscribe_table') {
