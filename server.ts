@@ -1,0 +1,804 @@
+import express from 'express';
+import http from 'http';
+import path from 'path';
+import { createServer as createViteServer } from 'vite';
+import { WebSocketServer, WebSocket } from 'ws';
+import {
+  Currency,
+  GameTable,
+  MicroserviceHealth,
+  User,
+} from './src/types';
+import {
+  computeBotMove,
+  handleAttackMove,
+  handleBito,
+  handleDefendMove,
+  handlePassMove,
+  handleTake,
+  handleTransferMove,
+  initializeGame,
+} from './server/durakEngine';
+import {
+  defaultPaymentGateways,
+  mockTransactions,
+  platformConfig,
+  processDeposit,
+  processWithdrawal,
+  updatePlatformConfig,
+} from './server/walletService';
+import {
+  defaultAntiFraudRules,
+  logFraudEvent,
+  mockFraudLogs,
+} from './server/antifraudService';
+import { generate2FASecret, verify2FACode } from './server/twoFactorService';
+import { createNotification, mockNotifications } from './server/pushNotifier';
+
+const app = express();
+app.use(express.json());
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+const PORT = 3000;
+
+// Default Demo User
+let currentUser: User = {
+  id: 'user_demoplayer_1',
+  username: 'Alex_Master',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+  role: 'admin', // Admin for demo full access
+  balances: {
+    USD: 250.0,
+    EUR: 180.0,
+    RUB: 15000.0,
+    USDT: 500.0,
+    TON: 45.0,
+    STARS: 1200,
+  },
+  is2FAEnabled: true,
+  twoFactorSecret: 'DURAK2FASECRET99',
+  riskScore: 15,
+  isBlocked: false,
+  telegramId: 'tg_88492011',
+  ipAddress: '192.168.1.104',
+  createdAt: new Date().toISOString(),
+};
+
+// Global Tables Store
+const activeTables: Map<string, GameTable> = new Map();
+
+// Initialize initial default Durak tables in lobby
+function seedDefaultTables() {
+  const table1: GameTable = {
+    id: 'tbl_vip_usdt',
+    name: 'High Rollers Podkidnoy',
+    mode: 'podkidnoy',
+    maxPlayers: 2,
+    deckSize: 36,
+    currency: 'USDT',
+    stake: 10,
+    turnTimeLimitSec: 20,
+    players: [
+      {
+        id: 'bot_pro_1',
+        username: 'DurakMaster_AI 🤖',
+        avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+        cards: [],
+        isBot: true,
+        isReady: true,
+        isOut: false,
+      },
+    ],
+    status: 'waiting',
+    attackerIndex: 0,
+    defenderIndex: 1,
+    trumpCard: null,
+    trumpSuit: null,
+    deck: [],
+    discardPile: [],
+    tablePairs: [],
+    winnerIds: [],
+    rakePercent: platformConfig.tableRakePercent,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+    chatMessages: [
+      { id: 'm1', sender: 'DurakMaster_AI 🤖', text: 'Welcome! Let’s play a clean game.', time: '10:00' },
+    ],
+  };
+
+  const table2: GameTable = {
+    id: 'tbl_perevod_rub',
+    name: 'Passing Durak (Переводной)',
+    mode: 'perevodnoy',
+    maxPlayers: 3,
+    deckSize: 36,
+    currency: 'RUB',
+    stake: 500,
+    turnTimeLimitSec: 25,
+    players: [
+      {
+        id: 'bot_perevod_1',
+        username: 'Grandmaster_Ivan 🤖',
+        avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=120&auto=format&fit=crop&q=80',
+        cards: [],
+        isBot: true,
+        isReady: true,
+        isOut: false,
+      },
+    ],
+    status: 'waiting',
+    attackerIndex: 0,
+    defenderIndex: 1,
+    trumpCard: null,
+    trumpSuit: null,
+    deck: [],
+    discardPile: [],
+    tablePairs: [],
+    winnerIds: [],
+    rakePercent: platformConfig.tableRakePercent,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+    chatMessages: [],
+  };
+
+  const table3: GameTable = {
+    id: 'tbl_ton_fast',
+    name: 'TON Turbo Fast Table (24 Cards)',
+    mode: 'podkidnoy',
+    maxPlayers: 2,
+    deckSize: 24,
+    currency: 'TON',
+    stake: 2,
+    turnTimeLimitSec: 15,
+    players: [],
+    status: 'waiting',
+    attackerIndex: 0,
+    defenderIndex: 1,
+    trumpCard: null,
+    trumpSuit: null,
+    deck: [],
+    discardPile: [],
+    tablePairs: [],
+    winnerIds: [],
+    rakePercent: platformConfig.tableRakePercent,
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+    chatMessages: [],
+  };
+
+  activeTables.set(table1.id, table1);
+  activeTables.set(table2.id, table2);
+  activeTables.set(table3.id, table3);
+}
+
+seedDefaultTables();
+
+// Active WebSocket Clients
+interface ClientConnection {
+  ws: WebSocket;
+  userId?: string;
+  username?: string;
+  avatar?: string;
+  tableId?: string;
+}
+const connectedClients: Set<ClientConnection> = new Set();
+
+function broadcastToTable(tableId: string, message: object) {
+  const payload = JSON.stringify(message);
+  for (const client of connectedClients) {
+    if (client.tableId === tableId && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(payload);
+    }
+  }
+}
+
+function broadcastLobbyState() {
+  const tablesList = Array.from(activeTables.values());
+  const payload = JSON.stringify({ type: 'lobby_tables', tables: tablesList });
+  for (const client of connectedClients) {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(payload);
+    }
+  }
+}
+
+// REST API ROUTES
+app.get('/api/auth/me', (req, res) => {
+  res.json({ user: currentUser });
+});
+
+app.get('/api/tables/:id', (req, res) => {
+  const table = activeTables.get(req.params.id);
+  if (!table) {
+    return res.status(404).json({ error: 'Table not found' });
+  }
+  res.json({ table });
+});
+
+app.get('/api/tables', (req, res) => {
+  res.json({ tables: Array.from(activeTables.values()) });
+});
+
+app.post('/api/auth/toggle-admin', (req, res) => {
+  currentUser.role = currentUser.role === 'admin' ? 'user' : 'admin';
+  res.json({ user: currentUser });
+});
+
+app.post('/api/wallet/deposit', (req, res) => {
+  const { currency, amount, gatewayId } = req.body;
+  const result = processDeposit(currentUser, currency as Currency, Number(amount), gatewayId);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  currentUser = result.updatedUser!;
+  createNotification(
+    currentUser.id,
+    'Deposit Confirmed',
+    `Successfully deposited ${result.transaction?.netAmount} ${currency} via ${result.transaction?.gateway}`,
+    'deposit'
+  );
+
+  res.json({ transaction: result.transaction, user: currentUser });
+});
+
+app.post('/api/wallet/withdraw', (req, res) => {
+  const { currency, amount, gatewayId, twoFactorCode } = req.body;
+  const result = processWithdrawal(currentUser, currency as Currency, Number(amount), gatewayId, twoFactorCode);
+
+  if (!result.success) {
+    if (result.requires2FA) {
+      return res.status(401).json({ requires2FA: true, error: result.error });
+    }
+    return res.status(400).json({ error: result.error });
+  }
+
+  currentUser = result.updatedUser!;
+
+  if (result.transaction?.status === 'flagged') {
+    logFraudEvent({
+      userId: currentUser.id,
+      username: currentUser.username,
+      transactionId: result.transaction.id,
+      eventType: 'High Amount Withdrawal Flagged',
+      scoreAdded: 35,
+      reason: `Withdrawal request of ${amount} ${currency} routed for manual verification`,
+      status: 'flagged',
+    });
+
+    createNotification(
+      currentUser.id,
+      'Withdrawal Under Review',
+      `Your payout of ${amount} ${currency} is under anti-fraud compliance verification.`,
+      'anti_fraud'
+    );
+  } else {
+    createNotification(
+      currentUser.id,
+      'Withdrawal Processed',
+      `Payout of ${result.transaction?.netAmount} ${currency} sent to ${result.transaction?.gateway}`,
+      'withdrawal'
+    );
+  }
+
+  res.json({ transaction: result.transaction, user: currentUser });
+});
+
+app.get('/api/wallet/gateways', (req, res) => {
+  res.json({ gateways: defaultPaymentGateways });
+});
+
+app.get('/api/wallet/transactions', (req, res) => {
+  res.json({ transactions: mockTransactions });
+});
+
+app.post('/api/security/2fa/setup', (req, res) => {
+  const { secret, qrCodeUrl } = generate2FASecret(currentUser.username);
+  currentUser.twoFactorSecret = secret;
+  res.json({ secret, qrCodeUrl });
+});
+
+app.post('/api/security/2fa/verify', (req, res) => {
+  const { code } = req.body;
+  const valid = verify2FACode(currentUser.twoFactorSecret || 'DURAK2FASECRET99', code);
+  if (!valid) {
+    return res.status(400).json({ error: 'Invalid 2FA authentication code' });
+  }
+
+  currentUser.is2FAEnabled = true;
+  createNotification(
+    currentUser.id,
+    '2FA Protection Enabled',
+    'Two-factor authentication is now active for all high-value transactions.',
+    'security'
+  );
+
+  res.json({ success: true, user: currentUser });
+});
+
+app.get('/api/notifications', (req, res) => {
+  res.json({ notifications: mockNotifications });
+});
+
+app.post('/api/notifications/mark-read', (req, res) => {
+  mockNotifications.forEach((n) => (n.read = true));
+  res.json({ success: true });
+});
+
+// ADMIN API ENDPOINTS
+app.get('/api/admin/metrics', (req, res) => {
+  let totalDepositsUSD = 0;
+  let totalWithdrawalsUSD = 0;
+  let totalRakeUSD = 0;
+
+  mockTransactions.forEach((tx) => {
+    if (tx.status === 'completed') {
+      if (tx.type === 'deposit') totalDepositsUSD += tx.amount;
+      if (tx.type === 'withdrawal') totalWithdrawalsUSD += tx.amount;
+      if (tx.type === 'platform_fee') totalRakeUSD += tx.amount;
+    }
+  });
+
+  const activeGamesCount = Array.from(activeTables.values()).filter((t) => t.status === 'playing').length;
+
+  res.json({
+    metrics: {
+      totalUsers: 1482,
+      activeWebSocketClients: connectedClients.size,
+      activeGamesCount,
+      totalDepositsUSD: Number((totalDepositsUSD + 12450).toFixed(2)),
+      totalWithdrawalsUSD: Number((totalWithdrawalsUSD + 8920).toFixed(2)),
+      totalPlatformRakeUSD: Number((totalRakeUSD + 640).toFixed(2)),
+      flaggedTransactionsCount: mockTransactions.filter((t) => t.status === 'flagged').length,
+    },
+    config: platformConfig,
+    antiFraudRules: defaultAntiFraudRules,
+  });
+});
+
+app.post('/api/admin/config', (req, res) => {
+  updatePlatformConfig(req.body);
+  res.json({ config: platformConfig });
+});
+
+app.get('/api/admin/antifraud/logs', (req, res) => {
+  res.json({ logs: mockFraudLogs });
+});
+
+app.post('/api/admin/transactions/approve', (req, res) => {
+  const { transactionId, action } = req.body;
+  const tx = mockTransactions.find((t) => t.id === transactionId);
+
+  if (!tx) {
+    return res.status(404).json({ error: 'Transaction not found' });
+  }
+
+  if (action === 'approve') {
+    tx.status = 'completed';
+    createNotification(
+      tx.userId,
+      'Withdrawal Approved',
+      `Your flagged payout #${tx.referenceId} has been approved by administrator.`,
+      'withdrawal'
+    );
+  } else {
+    tx.status = 'rejected';
+    // Refund balance back to user
+    currentUser.balances[tx.currency] = Number((currentUser.balances[tx.currency] + tx.amount).toFixed(2));
+    createNotification(
+      tx.userId,
+      'Withdrawal Rejected & Refunded',
+      `Your payout #${tx.referenceId} was declined by compliance and refunded to wallet.`,
+      'anti_fraud'
+    );
+  }
+
+  res.json({ success: true, transaction: tx, user: currentUser });
+});
+
+app.get('/api/microservices/health', (req, res) => {
+  const services: MicroserviceHealth[] = [
+    {
+      serviceName: 'Payment Gateway Broker',
+      status: 'healthy',
+      latencyMs: 14,
+      activeRequests: 8,
+      memoryUsageMb: 128,
+      uptimeSec: 86400,
+    },
+    {
+      serviceName: 'Durak WebSocket Real-time Cluster',
+      status: 'healthy',
+      latencyMs: 4,
+      activeRequests: connectedClients.size,
+      memoryUsageMb: 256,
+      uptimeSec: 86400,
+    },
+    {
+      serviceName: 'Anti-Fraud ML Engine',
+      status: 'healthy',
+      latencyMs: 22,
+      activeRequests: 3,
+      memoryUsageMb: 512,
+      uptimeSec: 86400,
+    },
+    {
+      serviceName: 'Telegram Mini App Auth Proxy',
+      status: 'healthy',
+      latencyMs: 9,
+      activeRequests: 12,
+      memoryUsageMb: 96,
+      uptimeSec: 86400,
+    },
+  ];
+
+  res.json({ services });
+});
+
+// WEBSOCKET GAME CONTROLLER
+wss.on('connection', (ws) => {
+  const clientConn: ClientConnection = { ws };
+  connectedClients.add(clientConn);
+
+  // Send initial lobby state
+  ws.send(JSON.stringify({ type: 'lobby_tables', tables: Array.from(activeTables.values()) }));
+
+  ws.on('message', (messageRaw) => {
+    try {
+      const data = JSON.parse(messageRaw.toString());
+
+      if (data.type === 'auth') {
+        clientConn.userId = data.userId || currentUser.id;
+        clientConn.username = data.username || currentUser.username;
+        clientConn.avatar = data.avatar || currentUser.avatar;
+      }
+
+      if (data.type === 'subscribe_table') {
+        clientConn.tableId = data.tableId;
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          ws.send(JSON.stringify({ type: 'table_state', table }));
+        }
+      }
+
+      if (data.type === 'create_table') {
+        const { name, mode, maxPlayers, currency, stake, turnTimeLimitSec, deckSize } = data;
+        const playerUserId = clientConn.userId || currentUser.id;
+        const playerUsername = clientConn.username || currentUser.username;
+        const playerAvatar = clientConn.avatar || currentUser.avatar;
+
+        const newTable: GameTable = {
+          id: `tbl_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          name: name || 'Durak Custom Table',
+          mode: mode || 'podkidnoy',
+          maxPlayers: maxPlayers || 2,
+          deckSize: deckSize || 36,
+          currency: currency || 'USDT',
+          stake: Number(stake),
+          turnTimeLimitSec: turnTimeLimitSec || 20,
+          players: [
+            {
+              id: playerUserId,
+              username: playerUsername,
+              avatar: playerAvatar,
+              cards: [],
+              isBot: false,
+              isReady: true,
+              isOut: false,
+            },
+          ],
+          status: 'waiting',
+          attackerIndex: 0,
+          defenderIndex: 1,
+          trumpCard: null,
+          trumpSuit: null,
+          deck: [],
+          discardPile: [],
+          tablePairs: [],
+          passedPlayerIds: [],
+          winnerIds: [],
+          rakePercent: platformConfig.tableRakePercent,
+          createdBy: playerUserId,
+          createdAt: new Date().toISOString(),
+          chatMessages: [],
+        };
+
+        activeTables.set(newTable.id, newTable);
+        clientConn.tableId = newTable.id;
+
+        broadcastLobbyState();
+        ws.send(JSON.stringify({ type: 'table_created', table: newTable }));
+      }
+
+      if (data.type === 'add_bot') {
+        const table = activeTables.get(data.tableId);
+        if (table && table.status === 'waiting' && table.players.length < table.maxPlayers) {
+          const botCount = table.players.filter((p) => p.isBot).length + 1;
+          table.players.push({
+            id: `bot_${Date.now()}_${botCount}`,
+            username: `DurakBot_${botCount} 🤖`,
+            avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+            cards: [],
+            isBot: true,
+            isReady: true,
+            isOut: false,
+          });
+
+          // Start game automatically if table is full
+          if (table.players.length === table.maxPlayers) {
+            let startedTable = initializeGame(table);
+            activeTables.set(startedTable.id, startedTable);
+          } else {
+            activeTables.set(table.id, table);
+          }
+
+          broadcastToTable(table.id, { type: 'table_state', table: activeTables.get(table.id) });
+          broadcastLobbyState();
+        }
+      }
+
+      if (data.type === 'join_table') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const playerUserId = clientConn.userId || currentUser.id;
+          const playerUsername = clientConn.username || currentUser.username;
+          const playerAvatar = clientConn.avatar || currentUser.avatar;
+
+          if (table.status === 'waiting' && table.players.length < table.maxPlayers) {
+            const alreadyIn = table.players.some((p) => p.id === playerUserId);
+            if (!alreadyIn) {
+              table.players.push({
+                id: playerUserId,
+                username: playerUsername,
+                avatar: playerAvatar,
+                cards: [],
+                isBot: false,
+                isReady: true,
+                isOut: false,
+              });
+            }
+
+            clientConn.tableId = table.id;
+
+            if (table.players.length === table.maxPlayers) {
+              let startedTable = initializeGame(table);
+              activeTables.set(startedTable.id, startedTable);
+            } else {
+              activeTables.set(table.id, table);
+            }
+
+            broadcastToTable(table.id, { type: 'table_state', table: activeTables.get(table.id) });
+            broadcastLobbyState();
+          } else {
+            // Join as spectator / subscriber if table already full or in progress
+            clientConn.tableId = table.id;
+            ws.send(JSON.stringify({ type: 'table_state', table }));
+          }
+        } else {
+          ws.send(JSON.stringify({ type: 'error', message: 'Стол не найден или закрыт' }));
+        }
+      }
+
+      if (data.type === 'attack') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const res = handleAttackMove(table, data.userId || clientConn.userId || currentUser.id, data.cardId);
+          if (res.success && res.updatedTable) {
+            activeTables.set(table.id, res.updatedTable);
+            broadcastToTable(table.id, { type: 'table_state', table: res.updatedTable });
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: res.error }));
+          }
+        }
+      }
+
+      if (data.type === 'defend') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const res = handleDefendMove(table, data.userId || clientConn.userId || currentUser.id, data.cardId, data.pairId);
+          if (res.success && res.updatedTable) {
+            activeTables.set(table.id, res.updatedTable);
+            broadcastToTable(table.id, { type: 'table_state', table: res.updatedTable });
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: res.error }));
+          }
+        }
+      }
+
+      if (data.type === 'pass') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const res = handlePassMove(table, data.userId || clientConn.userId || currentUser.id);
+          if (res.success && res.updatedTable) {
+            let nextTable = res.updatedTable;
+            if (nextTable.status === 'finished') {
+              nextTable = processGamePayout(nextTable);
+            }
+            activeTables.set(table.id, nextTable);
+            broadcastToTable(table.id, { type: 'table_state', table: nextTable });
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: res.error }));
+          }
+        }
+      }
+
+      if (data.type === 'transfer') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const res = handleTransferMove(table, data.userId || currentUser.id, data.cardId);
+          if (res.success && res.updatedTable) {
+            activeTables.set(table.id, res.updatedTable);
+            broadcastToTable(table.id, { type: 'table_state', table: res.updatedTable });
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: res.error }));
+          }
+        }
+      }
+
+      if (data.type === 'bito') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const res = handleBito(table);
+          if (res.success && res.updatedTable) {
+            let nextTable = res.updatedTable;
+            if (nextTable.status === 'finished') {
+              nextTable = processGamePayout(nextTable);
+            }
+            activeTables.set(table.id, nextTable);
+            broadcastToTable(table.id, { type: 'table_state', table: nextTable });
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: res.error }));
+          }
+        }
+      }
+
+      if (data.type === 'take') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          const res = handleTake(table);
+          if (res.success && res.updatedTable) {
+            let nextTable = res.updatedTable;
+            if (nextTable.status === 'finished') {
+              nextTable = processGamePayout(nextTable);
+            }
+            activeTables.set(table.id, nextTable);
+            broadcastToTable(table.id, { type: 'table_state', table: nextTable });
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: res.error }));
+          }
+        }
+      }
+
+      if (data.type === 'chat') {
+        const table = activeTables.get(data.tableId);
+        if (table) {
+          table.chatMessages.push({
+            id: `msg_${Date.now()}`,
+            sender: data.sender || currentUser.username,
+            text: data.text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+          activeTables.set(table.id, table);
+          broadcastToTable(table.id, { type: 'table_state', table });
+        }
+      }
+    } catch (err) {
+      console.error('WebSocket Error:', err);
+    }
+  });
+
+  ws.on('close', () => {
+    connectedClients.delete(clientConn);
+  });
+});
+
+function processGamePayout(table: GameTable): GameTable {
+  const totalPot = table.stake * table.players.length;
+  const rakeAmount = Number(((totalPot * table.rakePercent) / 100).toFixed(2));
+  const winnerPot = Number((totalPot - rakeAmount).toFixed(2));
+
+  // First winner gets the pot
+  const winnerId = table.winnerIds[0];
+  if (winnerId && winnerId === currentUser.id) {
+    currentUser.balances[table.currency] = Number(
+      (currentUser.balances[table.currency] + winnerPot).toFixed(2)
+    );
+
+    mockTransactions.unshift({
+      id: `tx_win_${Date.now()}`,
+      userId: currentUser.id,
+      username: currentUser.username,
+      type: 'game_win',
+      amount: winnerPot,
+      currency: table.currency,
+      status: 'completed',
+      feeAmount: rakeAmount,
+      netAmount: winnerPot,
+      gateway: 'Durak Pot Payout',
+      riskScore: 5,
+      createdAt: new Date().toISOString(),
+      referenceId: `WIN-${table.id.substring(4, 10).toUpperCase()}`,
+    });
+
+    createNotification(
+      currentUser.id,
+      'Victory! Game Pot Won',
+      `Congratulations! You won ${winnerPot} ${table.currency} in Durak match. Platform rake fee: ${rakeAmount} ${table.currency}`,
+      'bonus'
+    );
+  }
+
+  // Record platform fee revenue
+  mockTransactions.unshift({
+    id: `tx_rake_${Date.now()}`,
+    userId: 'platform',
+    username: 'System Rake',
+    type: 'platform_fee',
+    amount: rakeAmount,
+    currency: table.currency,
+    status: 'completed',
+    feeAmount: rakeAmount,
+    netAmount: rakeAmount,
+    gateway: 'Durak Platform Commission',
+    riskScore: 0,
+    createdAt: new Date().toISOString(),
+  });
+
+  return table;
+}
+
+// PERIODIC GAME ENGINE TURN TIMER & BOT AI PROCESSOR
+setInterval(() => {
+  activeTables.forEach((table) => {
+    if (table.status === 'playing') {
+      let updated = false;
+
+      // Check Bot AI Turns
+      const attacker = table.players[table.attackerIndex];
+      const defender = table.players[table.defenderIndex];
+
+      if ((attacker && attacker.isBot) || (defender && defender.isBot)) {
+        const tableAfterBot = computeBotMove(table);
+        if (tableAfterBot !== table) {
+          activeTables.set(table.id, tableAfterBot);
+          broadcastToTable(table.id, { type: 'table_state', table: tableAfterBot });
+          updated = true;
+        }
+      }
+
+      // Check turn deadline timeout
+      if (!updated && table.currentTurnDeadline && Date.now() > table.currentTurnDeadline) {
+        // Auto-action on timeout: if defender timed out, defender takes cards!
+        const res = handleTake(table);
+        if (res.success && res.updatedTable) {
+          activeTables.set(table.id, res.updatedTable);
+          broadcastToTable(table.id, { type: 'table_state', table: res.updatedTable });
+        }
+      }
+    }
+  });
+}, 1200);
+
+async function startServer() {
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Durak Gaming Platform running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();

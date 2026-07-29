@@ -1,0 +1,6 @@
+{
+  "name": "Durak Online - Real-Money Gaming Platform",
+  "description": "Multiplayer Durak card game with multi-currency wallets, payment gateways, anti-fraud protection, Telegram Mini App support, 2FA, and real-time WebSockets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
