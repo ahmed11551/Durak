@@ -363,22 +363,24 @@ app.post('/api/auth/telegram', (req, res) => {
   const tgId = String(telegramId || username || Math.random().toString(36).slice(2, 10));
   const safeName = String(firstName || username || 'Игрок').slice(0, 32);
 
-  let user = registeredUsers.get(tgId);
+  // Telegram initData verification placeholder: real HMAC-SHA256 validation should go here
+  let user = db.prepare('SELECT * FROM users WHERE telegramId = ?').get(tgId);
   if (!user) {
-    user = {
-      id: tgId,
-      username: safeName,
-      avatar: photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-      role: 'user',
-      balances: { USD: 0, EUR: 0, RUB: 0, USDT: 0, TON: 0, STARS: 0 },
-      is2FAEnabled: false,
-      riskScore: 0,
-      isBlocked: false,
-      telegramId: tgId,
-      ipAddress: '',
-      createdAt: new Date().toISOString(),
-    };
-    registeredUsers.set(tgId, user);
+    const id = 'tg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    db.prepare('INSERT INTO users (id, username, avatar, role, balances, is2FAEnabled, riskScore, isBlocked, telegramId, ipAddress, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      id,
+      safeName,
+      photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+      'user',
+      JSON.stringify({ USD: 0, EUR: 0, RUB: 0, USDT: 0, TON: 0, STARS: 0 }),
+      0,
+      0,
+      0,
+      tgId,
+      '',
+      new Date().toISOString()
+    );
+    user = db.prepare('SELECT * FROM users WHERE telegramId = ?').get(tgId);
   }
 
   const token = issueSession(user.id);
