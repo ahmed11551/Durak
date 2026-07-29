@@ -15,7 +15,7 @@ export function connectToTable(tableId: string): Promise<WebSocket> {
   ws?.close();
 
   return new Promise((resolve, reject) => {
-    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:8080'}/tables/${tableId}`;
+    const wsUrl = `ws://localhost:8080/tables/${tableId}`; // override with VITE_WS_URL at build time
     const connection = new WebSocket(wsUrl);
 
     (connection as WebSocket & { tableId?: string }).tableId = tableId;

@@ -1,4 +1,5 @@
 import express from 'express';
+const registeredUsers = new Map<string, any>();
 import http from 'http';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';

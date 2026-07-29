@@ -17,7 +17,6 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { AdminDashboard } from './components/AdminDashboard';
 import { soundManager } from './lib/audio';
 import { initTelegramWebApp, triggerHapticFeedback } from './lib/telegram';
-import { soundManager } from './lib/audio';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -42,6 +41,9 @@ export default function App() {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [wsSocket, setWsSocket] = useState<WebSocket | null>(null);
+  const [authToken, setAuthToken] = useState<string>('');
+  const [games, setGames] = useState<GameTable[]>([]);
+  const [showGameHistory, setShowGameHistory] = useState<boolean>(false);
 
   // Initialize Telegram WebApp integration
   useEffect(() => {
@@ -61,7 +63,7 @@ export default function App() {
         fetch('/api/wallet/gateways').then((r) => r.json()),
         fetch('/api/wallet/transactions').then((r) => r.json()),
         fetch('/api/notifications').then((r) => r.json()),
-        fetch(authToken ? '/api/user/games?token=' + encodeURIComponent(authToken) : '/api/user/games').then((r) => r.json()).catch(() => ({ games: [] })),
+        fetch('/api/user/games', { headers: authToken ? { Authorization: 'Bearer ' + authToken } : {} }).then((r) => r.json()).catch(() => ({ games: [] })),
       ]);
       setGames(gamesRes.games || []);
 
@@ -231,7 +233,7 @@ export default function App() {
     if (!authToken) { openAuth(); return; }
     setShowGameHistory(true);
     try {
-      const r = await fetch('/api/user/games?token=' + encodeURIComponent(authToken)).then(x => x.json());
+      const r = await fetch('/api/user/games', { headers: { Authorization: 'Bearer ' + authToken } }).then(x => x.json());
       setGames(r.games || []);
     } catch (e) { console.error(e); }
   };

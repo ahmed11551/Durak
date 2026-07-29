@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Bell,
+  BookOpen,
   CheckCircle,
   Coins,
   CreditCard,
@@ -15,7 +16,6 @@ import {
 import { Currency, User } from '../types';
 import { soundManager } from '../lib/audio';
 import { isTelegramMiniApp } from '../lib/telegram';
-import { ShieldCheck, BookOpen } from 'lucide-react';
 
 interface HeaderNavbarProps {
   user: User;
