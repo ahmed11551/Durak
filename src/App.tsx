@@ -251,17 +251,45 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen bg-app-bg text-contrast flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-black tracking-tight">Durak</h1>
           <p className="text-xs font-bold text-muted">Loading Durak Gaming Platform...</p>
-          {loadFailed && (
+          <div className="space-y-2">
             <button
-              onClick={fetchUserData}
+              onClick={async () => {
+                setAuthStep('login');
+                const email = window.prompt('Email:') || '';
+                const password = window.prompt('Password:') || '';
+                if (!email || !password) return;
+                const res = await fetch('/api/auth/login', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email, password }),
+                });
+                const data = await res.json();
+                if (data.user) {
+                  setUser(data.user);
+                  if (data.token) {
+                    localStorage.setItem('durak_auth_token', data.token);
+                    setAuthToken(data.token);
+                  }
+                } else {
+                  alert(data.error || 'Login failed');
+                }
+              }}
               className="px-4 py-2 rounded bg-accent text-white text-sm font-bold"
             >
-              Retry
+              Open quick login
             </button>
-          )}
+            {loadFailed && (
+              <button
+                onClick={fetchUserData}
+                className="px-4 py-2 rounded border border-contrast/20 text-contrast text-sm font-bold"
+              >
+                Retry
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
