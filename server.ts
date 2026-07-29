@@ -36,6 +36,8 @@ import {
 import { generate2FASecret, verify2FACode } from './server/twoFactorService';
 import { createNotification, mockNotifications } from './server/pushNotifier';
 
+import fs from 'fs';
+fs.mkdirSync('data', { recursive: true });
 const db = new Database('data/durak.sqlite');
 db.pragma('journal_mode = WAL');
 db.exec(`
@@ -56,7 +58,28 @@ db.exec(`
     createdAt TEXT
   );
   CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, userId TEXT, expiresAt INTEGER);
-  CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, mode TEXT, deckSize INTEGER, currency TEXT, stake REAL, status TEXT, createdAt TEXT);
+  CREATE TABLE IF NOT EXISTS games (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    mode TEXT,
+    deckSize INTEGER,
+    currency TEXT,
+    stake REAL,
+    status TEXT,
+    result TEXT,
+    createdAt TEXT
+  );
+  CREATE TABLE IF NOT EXISTS transactions (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    type TEXT,
+    amount REAL,
+    currency TEXT,
+    status TEXT,
+    gateway TEXT,
+    riskScore INTEGER,
+    createdAt TEXT
+  );
 `);
 function issueSession(userId: string) {
   const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -235,7 +258,20 @@ function broadcastLobbyState() {
 
 // REST API ROUTES
 app.get('/api/auth/me', (req, res) => {
-  res.json({ user: currentUser });
+  const token = String(req.headers.authorization || '').replace('Bearer ', '') || String(req.query.token || '');
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ? AND expiresAt > ?').get(token, Date.now());
+  if (!token || !session) return res.status(401).json({ error: 'unauthorized' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId);
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
+  res.json({ user });
+});
+
+app.get('/api/user/games', (req, res) => {
+  const token = String(req.headers.authorization || '').replace('Bearer ', '') || String(req.query.token || '');
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ? AND expiresAt > ?').get(token, Date.now());
+  if (!session) return res.status(401).json({ error: 'unauthorized' });
+  const rows = db.prepare('SELECT * FROM games WHERE userId = ? ORDER BY datetime(createdAt) DESC LIMIT 50').all(session.userId);
+  res.json({ games: rows });
 });
 
 app.get('/api/tables/:id', (req, res) => {
@@ -596,7 +632,7 @@ wss.on('connection', (ws) => {
 
         activeTables.set(newTable.id, newTable);
         clientConn.tableId = newTable.id;
-
+        db.prepare('INSERT OR REPLACE INTO games (id, userId, mode, deckSize, currency, stake, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(newTable.id, playerUserId, newTable.mode, newTable.deckSize, newTable.currency, Number(stake), newTable.status, new Date().toISOString());
         broadcastLobbyState();
         ws.send(JSON.stringify({ type: 'table_created', table: newTable }));
       }
@@ -835,6 +871,7 @@ function processGamePayout(table: GameTable): GameTable {
     createdAt: new Date().toISOString(),
   });
 
+  db.prepare('UPDATE games SET status = ?, result = ? WHERE id = ?').run('finished', winnerId || 'draw', table.id);
   return table;
 }
 

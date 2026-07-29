@@ -17,6 +17,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { AdminDashboard } from './components/AdminDashboard';
 import { soundManager } from './lib/audio';
 import { initTelegramWebApp, triggerHapticFeedback } from './lib/telegram';
+import { soundManager } from './lib/audio';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -50,15 +51,19 @@ export default function App() {
   // Fetch initial profile & data
   const fetchUserData = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const headers: Record<string,string> = {};
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+      const res = await fetch('/api/auth/me', { headers });
       const data = await res.json();
       if (data.user) setUser(data.user);
 
-      const [gwRes, txRes, notifRes] = await Promise.all([
+      const [gwRes, txRes, notifRes, gamesRes] = await Promise.all([
         fetch('/api/wallet/gateways').then((r) => r.json()),
         fetch('/api/wallet/transactions').then((r) => r.json()),
         fetch('/api/notifications').then((r) => r.json()),
+        fetch(authToken ? '/api/user/games?token=' + encodeURIComponent(authToken) : '/api/user/games').then((r) => r.json()).catch(() => ({ games: [] })),
       ]);
+      setGames(gamesRes.games || []);
 
       setGateways(gwRes.gateways || []);
       setTransactions(txRes.transactions || []);
@@ -70,6 +75,8 @@ export default function App() {
 
   useEffect(() => {
     fetchUserData();
+    const saved = localStorage.getItem('durak_auth_token');
+    if (saved) setAuthToken(saved);
   }, []);
 
   // Setup Real-time WebSocket connection
@@ -220,6 +227,14 @@ export default function App() {
   const openAuth = () => setAuthStep('login');
   const openOffer = () => setAuthStep('offer');
   const openRules = async () => { setShowRules(true); try { const r = await fetch('/api/rules/durak').then(x => x.json()); setRules(r); } catch(e) { console.error(e); } };
+  const openGameHistory = async () => {
+    if (!authToken) { openAuth(); return; }
+    setShowGameHistory(true);
+    try {
+      const r = await fetch('/api/user/games?token=' + encodeURIComponent(authToken)).then(x => x.json());
+      setGames(r.games || []);
+    } catch (e) { console.error(e); }
+  };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
