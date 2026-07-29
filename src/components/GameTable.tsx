@@ -67,10 +67,10 @@ className="relative min-h-[560px] rounded-2xl shadow-inner border border-slate-7
             key={player.id}
             className={`${positionClasses[idx]} flex flex-col items-center gap-1 backdrop-blur-md bg-white/70 hover:bg-white/90 transition-colors rounded-xl border border-slate-200 shadow-md px-3 py-2`}
           >
-            <div className="text-xs font-bold text-slate-800 whitespace-nowrap">{player.username}</div>
-            <div className="text-[10px] text-slate-500 font-mono">{player.cards.length} cards</div>
+            <div className="text-xs font-bold text-slate-900 whitespace-nowrap">{player.username}</div>
+            <div className="text-[10px] text-slate-600 font-mono">{player.cards.length} cards</div>
             {idx === currentTurn && (
-              <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">
+              <span className="text-[10px] font-black text-amber-700 uppercase tracking-wide">
                 Active
               </span>
             )}

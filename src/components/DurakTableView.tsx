@@ -150,28 +150,28 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
   };
 
   return (
-    <div className="relative min-h-[85vh] bg-gradient-to-b from-slate-950 via-emerald-950 to-slate-950 rounded-3xl border border-emerald-800/40 p-3 sm:p-6 shadow-2xl overflow-hidden flex flex-col justify-between">
+    <div className="relative min-h-[85vh] bg-app-bg rounded-3xl border border-slate-300 p-3 sm:p-6 shadow-2xl overflow-hidden flex flex-col justify-between">
       {/* Felt Vignette Texture overlay */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-900/30 via-slate-950/80 to-slate-950 pointer-events-none" />
 
       {/* Table Top Header Bar */}
-      <div className="relative z-10 flex items-center justify-between gap-2 bg-slate-900/90 p-3 rounded-2xl border border-slate-800 backdrop-blur-md">
+      <div className="relative z-10 flex items-center justify-between gap-2 bg-white/90 p-3 rounded-2xl border border-slate-200 backdrop-blur-md shadow-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={onBackToLobby}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors flex items-center gap-1 text-xs font-bold"
+            className="p-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl transition-colors shadow-sm flex items-center gap-1 text-xs font-bold"
           >
             <ArrowLeft className="w-4 h-4" /> Лобби
           </button>
 
           <div>
-            <h2 className="font-extrabold text-slate-100 text-sm sm:text-base flex items-center gap-2">
+            <h2 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-2">
               <span>{table.name}</span>
               <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-mono text-[10px] uppercase">
                 {table.mode}
               </span>
             </h2>
-            <div className="text-[11px] text-slate-400 flex items-center gap-2">
+            <div className="text-[11px] text-slate-500 flex items-center gap-2">
               <span>Банк: {table.stake * table.players.length} {table.currency}</span>
               <span>•</span>
               <span>Колода: {table.deckSize} карт</span>
@@ -194,7 +194,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
           {table.status === 'waiting' && table.players.length < table.maxPlayers && (
             <button
               onClick={onAddBot}
-              className="px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
+              className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
             >
               <Bot className="w-4 h-4" /> + Бота
             </button>
@@ -226,7 +226,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
               return (
                 <div
                   key={p.id}
-                  className={`relative p-3 rounded-2xl bg-slate-900/90 border transition-all flex items-center gap-3 shadow-xl backdrop-blur-md ${
+                  className={`relative p-3 rounded-2xl bg-white/90 border border-slate-200 transition-all flex items-center gap-3 shadow-xl backdrop-blur-md ${
                     isCurrentDefender
                       ? 'border-sky-500 ring-2 ring-sky-500/40'
                       : isCurrentAttacker
@@ -238,7 +238,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
                     <img
                       src={p.avatar}
                       alt={p.username}
-                      className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-700"
+                      className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-200"
                     />
                     {p.isBot && (
                       <span className="absolute -bottom-1 -right-1 bg-purple-600 text-white font-bold text-[9px] px-1 rounded-md">
@@ -252,10 +252,10 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
                       <span>{p.username}</span>
                       {p.isOut && <span className="text-emerald-400 text-[10px]">(Вышел)</span>}
                     </div>
-                    <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                    <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
                       <span>🎴 {p.cards.length} карт</span>
-                      {isCurrentAttacker && <span className="text-amber-400 font-bold">• Атака</span>}
-                      {isCurrentDefender && <span className="text-sky-400 font-bold">• Защита</span>}
+                      {isCurrentAttacker && <span className="text-amber-600 font-bold">• Атака</span>}
+                      {isCurrentDefender && <span className="text-sky-600 font-bold">• Защита</span>}
                     </div>
                   </div>
                 </div>
@@ -276,34 +276,34 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
 
             {/* Main Deck Stack */}
             {table.deck.length > 0 ? (
-              <div className="relative w-16 h-24 sm:w-20 sm:h-28 rounded-xl bg-gradient-to-br from-indigo-900 to-slate-900 border-2 border-indigo-500/60 shadow-2xl flex flex-col items-center justify-center p-2 text-center text-slate-200">
+              <div className="relative w-16 h-24 sm:w-20 sm:h-28 rounded-xl bg-gradient-to-br from-indigo-500 to-slate-700 border-2 border-indigo-400/70 shadow-2xl flex flex-col items-center justify-center p-2 text-center text-slate-700">
                 <span className="font-extrabold font-mono text-lg text-amber-400">
                   {table.deck.length}
                 </span>
-                <span className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">
+                <span className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">
                   в колоде
                 </span>
                 <CardBack className="absolute inset-0 m-auto opacity-20" />
               </div>
             ) : (
-              <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-xl border-2 border-dashed border-slate-700/60 flex items-center justify-center text-slate-600 font-bold text-xs">
+              <div className="w-16 h-24 sm:w-20 sm:h-28 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-500 font-bold text-xs">
                 Колода пуста
               </div>
             )}
 
             {/* Trump Suit Label */}
             {table.trumpSuit && (
-              <div className="absolute -top-3 right-0 bg-slate-900 border border-amber-500/40 rounded-full px-2 py-0.5 text-xs font-bold text-amber-400 shadow-md">
+              <div className="absolute -top-3 right-0 bg-slate-900 border border-amber-500/40 rounded-full px-2 py-0.5 text-xs font-bold text-amber-600 shadow-md">
                 {SUIT_ICONS[table.trumpSuit].symbol} Козырь
               </div>
             )}
           </div>
 
           {/* Table Active Pairs Field */}
-          <div className="flex-1 min-h-[140px] bg-slate-950/60 rounded-2xl border border-emerald-900/40 p-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6 shadow-inner">
+          <div className="flex-1 min-h-[140px] bg-white/80 rounded-2xl border border-slate-200 p-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6 shadow-inner">
             {table.status === 'waiting' ? (
               <div className="flex flex-col items-center justify-center text-center p-4 space-y-3">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-xs animate-pulse">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 font-bold text-xs animate-pulse">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Ожидание подключения игроков ({table.players.length}/{table.maxPlayers})</span>
                 </div>
@@ -321,7 +321,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
                   {table.players.length < table.maxPlayers && (
                     <button
                       onClick={onAddBot}
-                      className="px-4 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                      className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                     >
                       <Bot className="w-4 h-4" />
                       <span>+ Добавить бота</span>
@@ -374,7 +374,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
           {isMyTurnToDefend && (
             <button
               onClick={onTake}
-              className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-red-600/30 transition-all active:scale-95 flex items-center gap-1.5"
+              className="px-6 py-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-red-600/30 transition-all active:scale-95 flex items-center gap-1.5"
             >
               <span>БЕРУ (Take All)</span>
             </button>
@@ -384,7 +384,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
             <button
               onClick={() => { setFeedback("bito"); onBito(); }}
               disabled={table.tablePairs.length === 0 || table.tablePairs.some((p) => !p.defendCard)}
-              className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 flex items-center gap-1.5"
+              className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>БИТО (Discard)</span>
@@ -394,7 +394,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
           {table.mode === 'perevodnoy' && isMyTurnToDefend && selectedCardId && (
             <button
               onClick={() => onTransfer(selectedCardId)}
-              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5"
+              className="px-5 py-3 bg-indigo-700 hover:bg-indigo-600 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5"
             >
               <RotateCcw className="w-4 h-4" />
               <span>ПЕРЕВОД (Transfer)</span>
@@ -403,13 +403,13 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
         </div>
 
         {/* Current Player Hand (Bottom) */}
-        <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-3 backdrop-blur-md">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-            <span className="font-bold text-slate-200">
+        <div className="w-full bg-white/90 border border-slate-200 border-slate-800 rounded-2xl p-3 backdrop-blur-md">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+            <span className="font-bold text-slate-700">
               Ваша рука ({me?.cards.length || 0} карт):
             </span>
-            {isMyTurnToAttack && <span className="text-amber-400 font-bold animate-pulse">Ваш ход — Атакуйте!</span>}
-            {isMyTurnToDefend && <span className="text-sky-400 font-bold animate-pulse">Ваш ход — Защищайтесь!</span>}
+            {isMyTurnToAttack && <span className="text-amber-600 font-bold animate-pulse">Ваш ход — Атакуйте!</span>}
+            {isMyTurnToDefend && <span className="text-sky-600 font-bold animate-pulse">Ваш ход — Защищайтесь!</span>}
           </div>
 
           <Hand
@@ -423,10 +423,10 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
 
       {/* In-Game Table Chat Popup */}
       {showChat && (
-        <div className="absolute right-4 bottom-20 z-40 bg-slate-900 border border-slate-800 rounded-2xl w-80 shadow-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <span className="font-bold text-xs text-slate-200">Чат стола</span>
-            <button onClick={() => setShowChat(false)} className="text-slate-400 hover:text-slate-200">
+        <div className="absolute right-4 bottom-20 z-40 bg-white border border-slate-200 rounded-2xl w-80 shadow-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <span className="font-bold text-xs text-slate-800">Чат стола</span>
+            <button onClick={() => setShowChat(false)} className="text-slate-500 hover:text-slate-700">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -434,12 +434,12 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
           {/* Messages */}
           <div className="h-44 overflow-y-auto space-y-2 text-xs pr-1">
             {table.chatMessages.map((m) => (
-              <div key={m.id} className="bg-slate-950/80 p-2 rounded-xl border border-slate-800/60">
-                <div className="flex justify-between font-bold text-[10px] text-amber-400 mb-0.5">
+              <div key={m.id} className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                <div className="flex justify-between font-bold text-[10px] text-amber-600 mb-0.5">
                   <span>{m.sender}</span>
                   <span className="text-slate-500 font-mono">{m.time}</span>
                 </div>
-                <div className="text-slate-200 text-xs">{m.text}</div>
+                <div className="text-slate-700 text-xs">{m.text}</div>
               </div>
             ))}
           </div>
@@ -462,7 +462,7 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none"
               placeholder="Сообщение..."
             />
             <button type="submit" className="p-2 bg-amber-500 text-slate-950 font-bold rounded-xl">
@@ -474,26 +474,26 @@ export const DurakTableView: React.FC<DurakTableViewProps> = ({
 
       {/* Victory / Finish Dialog */}
       {table.status === 'finished' && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 text-center space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-white/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 text-center space-y-4 shadow-2xl">
             <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center mx-auto text-3xl">
               🏆
             </div>
 
-            <h2 className="text-2xl font-black text-slate-100">Игра завершена!</h2>
+            <h2 className="text-2xl font-black text-slate-900">Игра завершена!</h2>
 
             <div className="space-y-1 text-xs">
               {table.winnerIds.map((id, idx) => {
                 const winnerPlayer = table.players.find((p) => p.id === id);
                 return (
-                  <div key={id} className="p-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded-xl">
+                  <div key={id} className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold rounded-xl">
                     Победитель #{idx + 1}: {winnerPlayer?.username || id}
                   </div>
                 );
               })}
 
               {table.loserId && (
-                <div className="p-2 bg-red-500/10 border border-red-500/30 text-red-400 font-bold rounded-xl mt-2">
+                <div className="p-2 bg-red-50 border border-red-200 text-red-700 font-bold rounded-xl mt-2">
                   ДУРАК МАТЧА 💩: {table.players.find((p) => p.id === table.loserId)?.username}
                 </div>
               )}
