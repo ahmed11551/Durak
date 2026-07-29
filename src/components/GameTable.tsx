@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Card, CardSuit, PlayerState, TablePair } from '../types';
+import { CardSuit, PlayerState, TablePair } from '../types';
 import { CardComponent as Card } from './Card';
 import { CardBack } from './CardBack';
 
@@ -42,7 +42,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 }) => {
   return (
     <div
-      className="relative min-h-[560px] rounded-2xl shadow-inner border border-slate-700/40"
+className="relative min-h-[560px] rounded-2xl shadow-inner border border-slate-700/40 table-felt"
       style={{
         background: '#f0f4f8',
       }}
@@ -98,23 +98,33 @@ export const GameTable: React.FC<GameTableProps> = ({
         )}
       </div>
 
-      {/* Table pairs */}
+      {/* Table Pairs with play/take animations */}
       <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
         <div className="flex flex-wrap items-center justify-center gap-4 opacity-90">
           {tablePairs.map((pair) => (
             <motion.div
               key={pair.id}
               className="flex items-center gap-2"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
+              initial={{ scale: 0.8, opacity: 0, y: -20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 260, damping: 20 }}
             >
-              <motion.div className="shadow-xl rounded-lg" initial={{ y:-30 }} animate={{ y:0 }} transition={{ duration: 0.35 }}>
-                <CardComponent card={pair.attackCard} size="sm" />
+              <motion.div
+                className="shadow-xl rounded-lg"
+                initial={{ y: -30, rotate: -6 }}
+                animate={{ y: 0, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+              >
+                <Card card={pair.attackCard} size="sm" />
               </motion.div>
               {pair.defendCard && (
-                <motion.div className="shadow-xl rounded-lg" initial={{ y:30 }} animate={{ y:0 }} transition={{ duration: 0.35 }}>
-                  <CardComponent card={pair.defendCard} size="sm" />
+                <motion.div
+                  className="shadow-xl rounded-lg"
+                  initial={{ y: 30, rotate: 6 }}
+                  animate={{ y: 0, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                >
+                  <Card card={pair.defendCard} size="sm" />
                 </motion.div>
               )}
             </motion.div>
