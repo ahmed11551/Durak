@@ -22,7 +22,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onMarkAllRead,
 }) => {
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex justify-end">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex justify-end" onClick={(e) => { if (e.target === e.currentTarget) { onClose(); } }}>
       <div className="bg-slate-900 border-l border-slate-800 w-full max-w-md h-full flex flex-col p-5 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
