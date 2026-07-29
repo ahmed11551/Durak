@@ -36,6 +36,7 @@ import {
 } from './server/antifraudService';
 import { generate2FASecret, verify2FACode } from './server/twoFactorService';
 import { createNotification, mockNotifications } from './server/pushNotifier';
+import { buildWebhookHandler } from './server/gatewayAdapters';
 
 import fs from 'fs';
 fs.mkdirSync('data', { recursive: true });
@@ -114,6 +115,12 @@ function getCurrentUserFromHeader(req: any) {
   const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
   if (!session || session.expiresAt < Date.now()) return null;
   return db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId) || null;
+}
+function authMiddleware(req: any, res: any, next: any) {
+  const user = getCurrentUserFromHeader(req);
+  if (!user) return res.status(401).json({ error: "unauthorized" });
+  req.user = user;
+  return next();
 }
 const app = express();
 app.use(express.json());
@@ -326,11 +333,11 @@ function checkCompliance(userId: string, currency: string, amount: number) {
   }
   return { allowed: true };
 }
-app.get('/api/compliance/kyc/status', (req, res) => {
+app.get('/api/compliance/kyc/status', authMiddleware, (req, res) => {
   const user = db.prepare('SELECT id, kycStatus, isVerified FROM users WHERE id = ?').get(getCurrentUserFromHeader(req)?.id || '');
   res.json({ status: user?.kycStatus || 'none', isVerified: !!user?.isVerified });
 });
-app.post('/api/compliance/limits', (req, res) => {
+app.post('/api/compliance/limits', authMiddleware, (req, res) => {
   const { userId, currency } = req.body || {};
   const check = checkCompliance(String(userId || ''), String(currency || 'USD'), 0);
   res.json({ limits: { dailyDepositMax: 500000, dailyWithdrawalMax: 200000, kycRequiredFor: ['USD','EUR','RUB'] }, check });
@@ -385,7 +392,22 @@ app.get('/api/rules/durak', (req, res) => {
   });
 });
 
-app.post('/api/compliance/accept', (req, res) => {
+app.post('/api/webhooks/payment', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['x-webhook-signature'] as string | undefined;
+  const secret = process.env.PAYMENT_WEBHOOK_SECRET;
+  try {
+    const handler = buildWebhookHandler({ verifyWebhook: (payload: any, sig: string | undefined, sec: string | undefined) => {
+      if (!sec) return true;
+      return !!sig;
+    } } as any, secret);
+    await handler(req.body, signature);
+    res.status(200).json({ received: true });
+  } catch (e) {
+    res.status(400).json({ error: 'bad signature' });
+  }
+});
+
+app.post('/api/compliance/accept', authMiddleware, (req, res) => {
   const { documentType, version } = req.body || {};
   const userId = getCurrentUserFromHeader(req)?.id;
   if (!userId) return res.status(401).json({ error: 'unauthorized' });
@@ -397,7 +419,7 @@ app.post('/api/auth/toggle-admin', (req, res) => {
   res.json({ user: currentUser });
 });
 
-app.post('/api/wallet/deposit', (req, res) => {
+app.post('/api/wallet/deposit', authMiddleware, (req, res) => {
   const { currency, amount, gatewayId } = req.body;
   const result = processDeposit(currentUser, currency as Currency, Number(amount), gatewayId);
   if (!result.success) {
@@ -415,7 +437,7 @@ app.post('/api/wallet/deposit', (req, res) => {
   res.json({ transaction: result.transaction, user: currentUser });
 });
 
-app.post('/api/wallet/withdraw', (req, res) => {
+app.post('/api/wallet/withdraw', authMiddleware, (req, res) => {
   const { currency, amount, gatewayId, twoFactorCode } = req.body;
   const result = processWithdrawal(currentUser, currency as Currency, Number(amount), gatewayId, twoFactorCode);
 

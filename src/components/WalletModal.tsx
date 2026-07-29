@@ -248,7 +248,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <div>
               <div className="font-bold">Комплаенс / Режим демо</div>
-              <div>Демонстрация без реальных денег. Для продакшена требуется аккредитованный эквайринг, 152-ФЗ, AML/KYC, лицензия на азартные игры в РФ.</div>
+              <div>Продукционная версия: платежи включены как UI-обёртка. Реальные деньги появятся после подключения процессинга и compliance-проверок.</div>
             </div>
           </div>
 
