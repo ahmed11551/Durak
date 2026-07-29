@@ -34,6 +34,8 @@ export default function App() {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [authStep, setAuthStep] = useState<'check' | 'login' | 'offer'>('check');
   const [acceptedOffer, setAcceptedOffer] = useState<boolean>(false);
+  const [showRules, setShowRules] = useState<boolean>(false);
+  const [rules, setRules] = useState<{title:string; sections:{title:string; body:string}[]} | null>(null);
 
   const [gateways, setGateways] = useState<PaymentGatewayConfig[]>([]);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
@@ -217,6 +219,7 @@ export default function App() {
 
   const openAuth = () => setAuthStep('login');
   const openOffer = () => setAuthStep('offer');
+  const openRules = async () => { setShowRules(true); try { const r = await fetch('/api/rules/durak').then(x => x.json()); setRules(r); } catch(e) { console.error(e); } };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -242,6 +245,8 @@ export default function App() {
           const d = await res.json();
           if (d.user) setUser(d.user);
         }}
+        onOpenOffer={openOffer}
+        onOpenRules={openRules}
       />
 
       {/* Main View Container */}

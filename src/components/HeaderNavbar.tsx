@@ -15,7 +15,7 @@ import {
 import { Currency, User } from '../types';
 import { soundManager } from '../lib/audio';
 import { isTelegramMiniApp } from '../lib/telegram';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, BookOpen } from 'lucide-react';
 
 interface HeaderNavbarProps {
   user: User;
@@ -30,6 +30,7 @@ interface HeaderNavbarProps {
   onToggleMute: () => void;
   onToggleAdminRole: () => void;
   onOpenOffer?: () => void;
+  onOpenRules?: () => void;
 }
 
 const CURRENCIES: { code: Currency; symbol: string; bg: string; text: string }[] = [
@@ -54,6 +55,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   onToggleMute,
   onToggleAdminRole,
   onOpenOffer,
+  onOpenRules,
 }) => {
   const currentCurrMeta = CURRENCIES.find((c) => c.code === activeCurrency) || CURRENCIES[0];
 
@@ -162,9 +164,12 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
               {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
             </button>
 
-            {/* Offer + Auth */}
+            {/* Offer + Auth + Rules */}
             <button onClick={onOpenOffer} className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors" title="Оферта / Конфиденциальность">
               <ShieldCheck className="w-4 h-4" />
+            </button>
+            <button onClick={onOpenRules} className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors" title="Правила игры">
+              <BookOpen className="w-4 h-4" />
             </button>
             <button
               onClick={onOpenAdmin}

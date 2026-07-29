@@ -3,6 +3,7 @@ import http from 'http';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer, WebSocket } from 'ws';
+import Database from 'better-sqlite3';
 import {
   Currency,
   GameTable,
@@ -35,6 +36,34 @@ import {
 import { generate2FASecret, verify2FACode } from './server/twoFactorService';
 import { createNotification, mockNotifications } from './server/pushNotifier';
 
+const db = new Database('data/durak.sqlite');
+db.pragma('journal_mode = WAL');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    avatar TEXT,
+    email TEXT UNIQUE,
+    passwordHash TEXT,
+    role TEXT DEFAULT 'user',
+    balances TEXT DEFAULT '{}',
+    is2FAEnabled INTEGER DEFAULT 0,
+    twoFactorSecret TEXT,
+    riskScore INTEGER DEFAULT 0,
+    isBlocked INTEGER DEFAULT 0,
+    telegramId TEXT UNIQUE,
+    ipAddress TEXT,
+    createdAt TEXT
+  );
+  CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, userId TEXT, expiresAt INTEGER);
+  CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, mode TEXT, deckSize INTEGER, currency TEXT, stake REAL, status TEXT, createdAt TEXT);
+`);
+function issueSession(userId: string) {
+  const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  db.prepare('INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)').run(token, userId, expiresAt);
+  return token;
+}
 const app = express();
 app.use(express.json());
 
@@ -221,16 +250,24 @@ app.get('/api/tables', (req, res) => {
   res.json({ tables: Array.from(activeTables.values()) });
 });
 
-// In-memory user store for MVP; replace with DB in Phase 2
-const registeredUsers = new Map<string, User>();
-const sessions = new Map<string, { userId: string; expiresAt: number }>();
+app.post('/api/auth/register', (req, res) => {
+  const { username, email, password } = req.body || {};
+  if (!username || !email || !password) return res.status(400).json({ error: 'fill all fields' });
+  try {
+    db.prepare('INSERT INTO users (id, username, email, passwordHash, createdAt) VALUES (?, ?, ?, ?, ?)').run('u_' + Date.now(), username, email, Buffer.from(password).toString('base64'), new Date().toISOString());
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const token = issueSession(user.id);
+    res.json({ user, token });
+  } catch (e) { res.status(400).json({ error: 'email already exists' }); }
+});
 
-function issueSession(userId: string) {
-  const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  sessions.set(token, { userId, expiresAt });
-  return token;
-}
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!user || user.passwordHash !== Buffer.from(password).toString('base64')) return res.status(401).json({ error: 'invalid credentials' });
+  const token = issueSession(user.id);
+  res.json({ user, token });
+});
 
 app.post('/api/auth/telegram', (req, res) => {
   const { initData, username, firstName, lastName, telegramId, photoUrl } = req.body || {};
@@ -257,6 +294,20 @@ app.post('/api/auth/telegram', (req, res) => {
 
   const token = issueSession(user.id);
   res.json({ user, token });
+});
+
+app.get('/api/rules/durak', (req, res) => {
+  res.json({
+    title: 'Правила игры Дурак',
+    sections: [
+      { title: 'Общие положения', body: 'Играют 2-6 человек. Цель: избавиться от карт. Проигрывает последний игрок с картами — «Дурак матча». Варианты: подкидной и переводной.' },
+      { title: 'Подкидной дурак', body: 'Атакующий кладет карту. Защищающийся бьет старшей картой той же масти или козырем. После успешной защиты атакующий может подкинуть еще карту того же достоинства, пока защищающий не возьмет.' },
+      { title: 'Переводной дурак', body: 'Защищающийся может перевести ход на соседа картой того же достоинства. Сосед обязан защищаться или взять карты.' },
+      { title: 'Козырь', body: 'Масть козыря бьет любую другую масть. Козырь определяется нижней картой колоды.' },
+      { title: 'Беру и Бито', body: 'Если защищающийся не может отбиться — он забирает все карты со стола. Если атакующий закончил подкидывать — говорит «Бито», все карты сбрасываются в отбой.' },
+      { title: 'Ответственность', body: 'Игроки несут ответственность за честность игры. Обнаруженные сговоры/читерство ведут к блокировке.' },
+    ]
+  });
 });
 
 app.post('/api/auth/toggle-admin', (req, res) => {
