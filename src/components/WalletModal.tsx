@@ -243,7 +243,16 @@ export const WalletModal: React.FC<WalletModalProps> = ({
             </div>
           )}
 
-          {/* TAB DEPOSIT */}
+          {/* Compliance Notice */}
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" />
+            <div>
+              <div className="font-bold">Комплаенс / Режим демо</div>
+              <div>Демонстрация без реальных денег. Для продакшена требуется аккредитованный эквайринг, 152-ФЗ, AML/KYC, лицензия на азартные игры в РФ.</div>
+            </div>
+          </div>
+
+          {/** TAB DEPOSIT */}
           {tab === 'deposit' && (
             <form onSubmit={handleDepositSubmit} className="space-y-4">
               <div>

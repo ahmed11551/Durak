@@ -10,8 +10,11 @@ export interface UserBalances {
 }
 
 export type UserRole = 'user' | 'admin';
+export type ComplianceStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
 export interface User {
+  kycStatus?: ComplianceStatus;
+  isVerified?: boolean;
   id: string;
   username: string;
   avatar: string;

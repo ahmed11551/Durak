@@ -14,6 +14,7 @@ import { DurakTableView } from './components/DurakTableView';
 import { WalletModal } from './components/WalletModal';
 import { TwoFactorModal } from './components/TwoFactorModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
+import { ComplianceModal } from './components/ComplianceModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { soundManager } from './lib/audio';
 import { initTelegramWebApp, triggerHapticFeedback } from './lib/telegram';
@@ -35,6 +36,7 @@ export default function App() {
   const [authStep, setAuthStep] = useState<'check' | 'login' | 'offer'>('check');
   const [acceptedOffer, setAcceptedOffer] = useState<boolean>(false);
   const [showRules, setShowRules] = useState<boolean>(false);
+  const [showCompliance, setShowCompliance] = useState<boolean>(false);
   const [rules, setRules] = useState<{title:string; sections:{title:string; body:string}[]} | null>(null);
 
   const [gateways, setGateways] = useState<PaymentGatewayConfig[]>([]);
@@ -264,6 +266,7 @@ export default function App() {
         }}
         onOpenOffer={openOffer}
         onOpenRules={openRules}
+        onOpenCompliance={() => setShowCompliance(true)}
       />
 
       {/* Main View Container */}
@@ -316,6 +319,22 @@ export default function App() {
           user={user}
           onClose={() => setShow2FA(false)}
           onVerifyAndEnable={handleVerify2FA}
+        />
+      )}
+
+      {/* Compliance Modal */}
+      {showCompliance && (
+        <ComplianceModal
+          user={user}
+          onClose={() => setShowCompliance(false)}
+          onAccepted={async (documentType) => {
+            await fetch('/api/compliance/accept', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ documentType, version: '1.0' }),
+            });
+            setShowCompliance(false);
+          }}
         />
       )}
 

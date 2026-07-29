@@ -41,6 +41,24 @@ import fs from 'fs';
 fs.mkdirSync('data', { recursive: true });
 const db = new Database('data/durak.sqlite');
 db.pragma('journal_mode = WAL');
+try { db.prepare("ALTER TABLE users ADD COLUMN kycStatus TEXT DEFAULT 'none'").run(); } catch (e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN isVerified INTEGER DEFAULT 0').run(); } catch (e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN dailyDepositREAL DEFAULT 0').run(); } catch (e) {}
+try { db.prepare('ALTER TABLE users ADD COLUMN dailyWithdrawalREAL DEFAULT 0').run(); } catch (e) {}
+
+// Compliance schema additions
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN kycStatus TEXT DEFAULT \'none\'').run();
+} catch (e) {}
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN isVerified INTEGER DEFAULT 0').run();
+} catch (e) {}
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN dailyDeposit RUB DEFAULT 0').run();
+} catch (e) {}
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN dailyWithdrawalRUB DEFAULT 0').run();
+} catch (e) {}
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -88,13 +106,22 @@ function issueSession(userId: string) {
   db.prepare('INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)').run(token, userId, expiresAt);
   return token;
 }
+
+function getCurrentUserFromHeader(req: any) {
+  const header = req.headers.authorization || '';
+  const token = header.replace('Bearer ', '').trim();
+  if (!token) return null;
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  if (!session || session.expiresAt < Date.now()) return null;
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId) || null;
+}
 const app = express();
 app.use(express.json());
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3001)
 
 // Default Demo User
 let currentUser: User = {
@@ -287,15 +314,26 @@ app.get('/api/tables', (req, res) => {
   res.json({ tables: Array.from(activeTables.values()) });
 });
 
-app.post('/api/auth/register', (req, res) => {
-  const { username, email, password } = req.body || {};
-  if (!username || !email || !password) return res.status(400).json({ error: 'fill all fields' });
-  try {
-    db.prepare('INSERT INTO users (id, username, email, passwordHash, createdAt) VALUES (?, ?, ?, ?, ?)').run('u_' + Date.now(), username, email, Buffer.from(password).toString('base64'), new Date().toISOString());
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-    const token = issueSession(user.id);
-    res.json({ user, token });
-  } catch (e) { res.status(400).json({ error: 'email already exists' }); }
+// Compliance: simple daily rate-limit stub
+const dailyDeposit = new Map<string, number>();
+const dailyWithdrawal = new Map<string, number>();
+function checkCompliance(userId: string, currency: string, amount: number) {
+  const key = userId + ':' + new Date().toISOString().slice(0, 10);
+  if (currency === 'RUB' || currency === 'USD' || currency === 'EUR') {
+    const dep = (dailyDeposit.get(key) || 0) + amount;
+    if (dep > 500000) return { allowed: false, reason: 'Daily deposit limit exceeded (500k)', risk: 40 };
+    dailyDeposit.set(key, dep);
+  }
+  return { allowed: true };
+}
+app.get('/api/compliance/kyc/status', (req, res) => {
+  const user = db.prepare('SELECT id, kycStatus, isVerified FROM users WHERE id = ?').get(getCurrentUserFromHeader(req)?.id || '');
+  res.json({ status: user?.kycStatus || 'none', isVerified: !!user?.isVerified });
+});
+app.post('/api/compliance/limits', (req, res) => {
+  const { userId, currency } = req.body || {};
+  const check = checkCompliance(String(userId || ''), String(currency || 'USD'), 0);
+  res.json({ limits: { dailyDepositMax: 500000, dailyWithdrawalMax: 200000, kycRequiredFor: ['USD','EUR','RUB'] }, check });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -345,6 +383,13 @@ app.get('/api/rules/durak', (req, res) => {
       { title: 'Ответственность', body: 'Игроки несут ответственность за честность игры. Обнаруженные сговоры/читерство ведут к блокировке.' },
     ]
   });
+});
+
+app.post('/api/compliance/accept', (req, res) => {
+  const { documentType, version } = req.body || {};
+  const userId = getCurrentUserFromHeader(req)?.id;
+  if (!userId) return res.status(401).json({ error: 'unauthorized' });
+  res.json({ acceptedAt: new Date().toISOString(), userId, documentType, version });
 });
 
 app.post('/api/auth/toggle-admin', (req, res) => {
