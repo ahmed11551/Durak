@@ -453,6 +453,16 @@ app.post('/api/notifications/mark-read', (req, res) => {
 });
 
 // ADMIN API ENDPOINTS
+app.get('/api/admin/users', (req, res) => {
+  const rows = db.prepare('SELECT id, username, email, role, riskScore, isBlocked, createdAt FROM users ORDER BY datetime(createdAt) DESC').all();
+  res.json({ users: rows });
+});
+
+app.get('/api/admin/games', (req, res) => {
+  const rows = db.prepare('SELECT * FROM games ORDER BY datetime(createdAt) DESC LIMIT 100').all();
+  res.json({ games: rows });
+});
+
 app.get('/api/admin/metrics', (req, res) => {
   let totalDepositsUSD = 0;
   let totalWithdrawalsUSD = 0;
