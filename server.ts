@@ -43,24 +43,9 @@ import fs from 'fs';
 fs.mkdirSync('data', { recursive: true });
 const db = new Database('data/durak.sqlite');
 db.pragma('journal_mode = WAL');
-try { db.prepare("ALTER TABLE users ADD COLUMN kycStatus TEXT DEFAULT 'none'").run(); } catch (e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN isVerified INTEGER DEFAULT 0').run(); } catch (e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN dailyDepositREAL DEFAULT 0').run(); } catch (e) {}
-try { db.prepare('ALTER TABLE users ADD COLUMN dailyWithdrawalREAL DEFAULT 0').run(); } catch (e) {}
+db.pragma('busy_timeout = 5000');
+db.pragma('synchronous = NORMAL');
 
-// Compliance schema additions
-try {
-  db.prepare('ALTER TABLE users ADD COLUMN kycStatus TEXT DEFAULT \'none\'').run();
-} catch (e) {}
-try {
-  db.prepare('ALTER TABLE users ADD COLUMN isVerified INTEGER DEFAULT 0').run();
-} catch (e) {}
-try {
-  db.prepare('ALTER TABLE users ADD COLUMN dailyDeposit RUB DEFAULT 0').run();
-} catch (e) {}
-try {
-  db.prepare('ALTER TABLE users ADD COLUMN dailyWithdrawalRUB DEFAULT 0').run();
-} catch (e) {}
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -78,10 +63,14 @@ db.exec(`
     ipAddress TEXT,
     createdAt TEXT
   );
-  CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, userId TEXT, expiresAt INTEGER);
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    userId TEXT REFERENCES users(id),
+    expiresAt INTEGER
+  );
   CREATE TABLE IF NOT EXISTS games (
     id TEXT PRIMARY KEY,
-    userId TEXT,
+    userId TEXT REFERENCES users(id),
     mode TEXT,
     deckSize INTEGER,
     currency TEXT,
@@ -97,16 +86,41 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
-    userId TEXT,
+    userId TEXT REFERENCES users(id),
     type TEXT,
     amount REAL,
     currency TEXT,
     status TEXT,
     gateway TEXT,
-    riskScore INTEGER,
+    riskScore INTEGER DEFAULT 0,
     createdAt TEXT
   );
 `);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt ON sessions(expiresAt);
+  CREATE INDEX IF NOT EXISTS idx_games_userId ON games(userId);
+  CREATE INDEX IF NOT EXISTS idx_transactions_userId ON transactions(userId);
+  CREATE INDEX IF NOT EXISTS idx_transactions_createdAt ON transactions(createdAt);
+`);
+
+db.exec(
+  `
+CREATE TABLE IF NOT EXISTS outbox (
+  id TEXT PRIMARY KEY,
+  aggregate_type TEXT NOT NULL,
+  aggregate_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  published_at TEXT,
+  retry_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_status_created ON outbox(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON outbox(aggregate_type, aggregate_id);
+  `
+);
 
 function persistTableState(table: GameTable) {
   try {
@@ -119,7 +133,6 @@ function persistTableState(table: GameTable) {
     console.error('Failed to persist table state', e);
   }
 }
-
 
 const SALT_ROUNDS = 12;
 
@@ -1041,6 +1054,67 @@ setInterval(() => {
     }
   });
 }, 1200);
+
+
+// OUTBOX + SIMPLE SAGA
+function enqueueOutbox(aggregateType: string, aggregateId: string, eventType: string, payload: any): void {
+  const id = 'evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  db.prepare("INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload, status) VALUES (?, ?, ?, ?, ?, 'pending')").run(id, aggregateType, aggregateId, eventType, JSON.stringify(payload));
+}
+
+function publishPendingOutbox(limit = 50): any[] {
+  const rows = db.prepare("SELECT id, aggregate_type, aggregate_id, event_type, payload, status, created_at, retry_count FROM outbox WHERE status = 'pending' ORDER BY created_at LIMIT ?").all(limit) as any[];
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  db.prepare("UPDATE outbox SET status = 'published', published_at = datetime('now') WHERE id IN (" + ids.map(() => "?").join(",") + ")").run(...ids);
+  return rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
+}
+
+async function runJoinTableSaga(input: { tableId: string; userId: string; stake: number; currency: string; gatewayId: string }): Promise<void> {
+  const steps: { name: string; run: () => Promise<void>; compensate: () => Promise<void> }[] = [
+    {
+      name: 'reserve_stake',
+      run: async () => {
+        const res = processDeposit({ id: input.userId, username: '', avatar: '', role: 'user', balances: { USD: 0, EUR: 0, RUB: 0, USDT: 0, TON: 0, STARS: 0 }, is2FAEnabled: false, riskScore: 0, isBlocked: false, createdAt: new Date().toISOString() } as any, input.currency as any, input.stake, input.gatewayId);
+        if (!res.success) throw new Error(res.error || 'reserve failed');
+      },
+      compensate: async () => {
+        enqueueOutbox('Wallet', input.userId, 'StakeRefunded', { tableId: input.tableId, stake: input.stake, currency: input.currency });
+      },
+    },
+    {
+      name: 'join_table',
+      run: async () => {
+        const table = activeTables.get(input.tableId);
+        if (!table) throw new Error('table not found');
+        const player = { id: input.userId, username: 'Player', avatar: '', cards: [], isBot: false, isReady: true, isOut: false };
+        if (table.status === 'waiting' && table.players.length < table.maxPlayers && !table.players.some((p) => p.id === input.userId)) {
+          table.players.push(player);
+          if (table.players.length === table.maxPlayers) {
+            const started = initializeGame(table);
+            activeTables.set(table.id, started);
+          } else {
+            activeTables.set(table.id, table);
+          }
+        }
+      },
+      compensate: async () => {
+        const table = activeTables.get(input.tableId);
+        if (!table) return;
+        table.players = table.players.filter((p) => p.id !== input.userId);
+        activeTables.set(table.id, table);
+      },
+    },
+  ];
+
+  const completed: { name: string; compensate: () => Promise<void> }[] = [];
+  for (const step of steps) {
+    await step.run();
+    completed.push({ name: step.name, compensate: step.compensate });
+  }
+  enqueueOutbox('GameTable', input.tableId, 'PlayerJoined', { userId: input.userId, stake: input.stake, currency: input.currency });
+}
+
 
 async function startServer() {
   const distPath = path.join(process.cwd(), 'dist');
