@@ -90,6 +90,11 @@ db.exec(`
     result TEXT,
     createdAt TEXT
   );
+  CREATE TABLE IF NOT EXISTS table_snapshots (
+    id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    updatedAt TEXT
+  );
   CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
     userId TEXT,
@@ -102,7 +107,23 @@ db.exec(`
     createdAt TEXT
   );
 `);
+
+function persistTableState(table: GameTable) {
+  try {
+    db.prepare('INSERT OR REPLACE INTO table_snapshots (id, state, updatedAt) VALUES (?, ?, ?)').run(
+      table.id,
+      JSON.stringify(table),
+      new Date().toISOString()
+    );
+  } catch (e) {
+    console.error('Failed to persist table state', e);
+  }
+}
+
+
 const SALT_ROUNDS = 12;
+
+seedDefaultTables();
 function issueSession(userId: string) {
   const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -157,6 +178,21 @@ let currentUser: User = {
 
 // Global Tables Store
 const activeTables: Map<string, GameTable> = new Map();
+
+// Restore active tables from snapshots at startup
+try {
+  const rows = db.prepare('SELECT id, state FROM table_snapshots').all();
+  for (const row of rows as any[]) {
+    try {
+      const table = JSON.parse(row.state) as GameTable;
+      activeTables.set(table.id, table);
+    } catch (e) {
+      console.error('Failed to restore table snapshot', row.id, e);
+    }
+  }
+} catch (e) {
+  console.error('Failed to load table snapshots', e);
+}
 
 // Initialize initial default Durak tables in lobby
 function seedDefaultTables() {
@@ -727,6 +763,7 @@ wss.on('connection', (ws) => {
         };
 
         activeTables.set(newTable.id, newTable);
+      persistTableState(newTable);
         clientConn.tableId = newTable.id;
         db.prepare('INSERT OR REPLACE INTO games (id, userId, mode, deckSize, currency, stake, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(newTable.id, playerUserId, newTable.mode, newTable.deckSize, newTable.currency, Number(stake), newTable.status, new Date().toISOString());
         broadcastLobbyState();
@@ -751,8 +788,10 @@ wss.on('connection', (ws) => {
           if (table.players.length === table.maxPlayers) {
             let startedTable = initializeGame(table);
             activeTables.set(startedTable.id, startedTable);
+          persistTableState(startedTable);
           } else {
             activeTables.set(table.id, table);
+            persistTableState(table);
           }
 
           broadcastToTable(table.id, { type: 'table_state', table: activeTables.get(table.id) });
