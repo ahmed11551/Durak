@@ -6,6 +6,9 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer, WebSocket } from 'ws';
 import Database from 'better-sqlite3';
+
+// Global Tables Store — declare before any use to avoid TS/bundle order issues
+const activeTables = new Map<any, any>();
 import {
   Currency,
   GameTable,
@@ -136,7 +139,6 @@ function persistTableState(table: GameTable) {
 
 const SALT_ROUNDS = 12;
 
-seedDefaultTables();
 function issueSession(userId: string) {
   const token = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -180,32 +182,13 @@ let currentUser: User = {
     TON: 45.0,
     STARS: 1200,
   },
-  is2FAEnabled: true,
-  twoFactorSecret: 'DURAK2FASECRET99',
-  riskScore: 15,
+  is2FAEnabled: false,
+  twoFactorSecret: '',
+  riskScore: 0,
   isBlocked: false,
-  telegramId: 'tg_88492011',
-  ipAddress: '192.168.1.104',
+  ipAddress: '',
   createdAt: new Date().toISOString(),
 };
-
-// Global Tables Store
-const activeTables: Map<string, GameTable> = new Map();
-
-// Restore active tables from snapshots at startup
-try {
-  const rows = db.prepare('SELECT id, state FROM table_snapshots').all();
-  for (const row of rows as any[]) {
-    try {
-      const table = JSON.parse(row.state) as GameTable;
-      activeTables.set(table.id, table);
-    } catch (e) {
-      console.error('Failed to restore table snapshot', row.id, e);
-    }
-  }
-} catch (e) {
-  console.error('Failed to load table snapshots', e);
-}
 
 // Initialize initial default Durak tables in lobby
 function seedDefaultTables() {
@@ -1073,6 +1056,55 @@ setInterval(() => {
   });
 }, 1200);
 
+
+
+const TRUSTED_ORIGINS = new Set(['http://localhost:3005','http://localhost:3006','http://127.0.0.1:3005','http://127.0.0.1:3006']);
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 120;
+const authRateMap = new Map<string, {count:number; ts:number}>();
+function getClientIp(req:any){ return (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown') as string; }
+function rateLimitAuth(req:any,res:any,next:any){
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const item = authRateMap.get(ip);
+  if(item && now - item.ts < RATE_LIMIT_WINDOW_MS && item.count > RATE_LIMIT_MAX){
+    return res.status(429).json({error:'too many requests'});
+  }
+  authRateMap.set(ip, { count: (item?.count || 0) + 1, ts: now });
+  next();
+}
+function redactUser(user:any){
+  if(!user || typeof user !== 'object') return user;
+  const u = { ...user };
+  delete u.passwordHash;
+  delete u.twoFactorSecret;
+  delete u.salt;
+  return u;
+}
+function sanitizeResponse(req:any,res:any,next:any){
+  const origin = req.headers.origin;
+  if(origin && TRUSTED_ORIGINS.has(origin)){
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary','Origin');
+    res.header('Access-Control-Allow-Credentials','true');
+    res.header('Access-Control-Allow-Methods','GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers','Content-Type,Authorization');
+  }
+  if(req.method === 'OPTIONS') return res.sendStatus(204);
+  const json = res.json;
+  res.json = (body:any)=>{
+    if(body && body.user) body.user = redactUser(body.user);
+    if(body && Array.isArray(body.users)) body.users = body.users.map(redactUser);
+    if(body && Array.isArray(body.transactions)) body.transactions = body.transactions.map((t:any)=>{ const u={...t}; delete u.user; return u; });
+    return json.call(res,body);
+  };
+  next();
+}
+
+app.use(sanitizeResponse);
+app.use('/api/auth/login', rateLimitAuth);
+app.use('/api/auth/telegram', rateLimitAuth);
+app.use('/api/auth/2fa/verify', rateLimitAuth);
 
 // OUTBOX + SIMPLE SAGA
 function enqueueOutbox(aggregateType: string, aggregateId: string, eventType: string, payload: any): void {
