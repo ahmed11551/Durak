@@ -477,6 +477,24 @@ app.post('/api/auth/toggle-admin', (req, res) => {
   res.json({ user: currentUser });
 });
 
+app.post('/api/auth/2fa/setup', authMiddleware, (req, res) => {
+  const { generate2FASecret } = require('./server/twoFactorService');
+  const user = getCurrentUserFromHeader(req);
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
+  const setup = generate2FASecret(user.username);
+  res.json({ secret: setup.secret, qrCodeUrl: setup.qrCodeUrl, otpauthUrl: setup.otpauthUrl });
+});
+
+app.post('/api/auth/2fa/verify', authMiddleware, async (req, res) => {
+  const { verify2FACode } = require('./server/twoFactorService');
+  const user = getCurrentUserFromHeader(req);
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
+  const { code, secret } = req.body || {};
+  const ok = await verify2FACode(String(secret || ''), String(code || ''));
+  if (!ok) return res.status(400).json({ error: 'invalid code' });
+  res.json({ success: true });
+});
+
 app.post('/api/wallet/deposit', authMiddleware, (req, res) => {
   const { currency, amount, gatewayId } = req.body;
   const result = processDeposit(currentUser, currency as Currency, Number(amount), gatewayId);
